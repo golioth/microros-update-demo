@@ -22,9 +22,24 @@ first; pouch transport gets glued in later.
     source .venv/bin/activate
     west update
 
+    # Apply the local module patch (see patches/) — needed because colcon
+    # caches CMake flags across libc/Kconfig changes and stale flags break
+    # the cross-build:
+    git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0001-colcon-cmake-clean-cache.patch
+
+    uv pip install -r deps/zephyr/scripts/requirements.txt -r deps/nrf/scripts/requirements.txt
+    uv pip install colcon-common-extensions catkin_pkg empy lark
+
 ## Build & flash
 
-    west build -b promicro_nrf52840 app
+SDK 0.17.0 is required (matches tikk-fleet; SDK 0.17.4's picolibc conflicts
+with zephyr v4.0.99-ncs1-1):
+
+    ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.0 west build -b promicro_nrf52840 app
+
+First build cross-compiles all of micro-ROS (~25 ROS 2 repos) as part of the
+build — expect several minutes. Subsequent builds are incremental.
+
     west flash   # (board not connected yet — flash method TBD, see Notes)
 
 ## Run the micro-ROS agent (host)

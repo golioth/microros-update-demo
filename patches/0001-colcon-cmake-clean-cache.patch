@@ -1,0 +1,12 @@
+diff --git a/modules/libmicroros/libmicroros.mk b/modules/libmicroros/libmicroros.mk
+index a7820c8..482dc73 100644
+--- a/modules/libmicroros/libmicroros.mk
++++ b/modules/libmicroros/libmicroros.mk
+@@ -114,6 +114,7 @@ $(COMPONENT_PATH)/micro_ros_src/install: configure_colcon_meta configure_toolcha
+ 		--merge-install \
+ 		--packages-ignore-regex=.*_cpp \
+ 		--metas $(COMPONENT_PATH)/configured_colcon.meta \
++		--cmake-clean-cache \
+ 		--cmake-args \
+ 		"--no-warn-unused-cli" \
+ 		-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=OFF \

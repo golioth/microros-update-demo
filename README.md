@@ -44,7 +44,24 @@ build — expect several minutes. Subsequent builds are incremental.
 
 ## Run the micro-ROS agent (host)
 
-    cd host && docker compose up
+    cd host && docker compose up -d
+
+## Visualizing /tilt
+
+The agent and any ROS 2 containers must set `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`
+— Fast DDS's shared-memory transport silently drops data across container
+/dev/shm boundaries (symptom: topic lists, but echo gets nothing).
+
+Live scrolling charts (x/y/z) in the terminal:
+
+    docker run --rm --net=host -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+      -v ~/golioth/microros/host:/host:ro ros:kilted-ros-core \
+      python3 /host/viz.py
+
+Plain message stream:
+
+    docker run --rm --net=host -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+      ros:kilted-ros-core ros2 topic echo /tilt
 
 Then from any ROS 2 machine/container:
 

@@ -22,14 +22,14 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import Vector3Stamped
 
 HIST = 60          # samples kept (~6 s at 10 Hz)
-PLOT_H = 4         # chart rows per axis (keep the whole frame ~28 lines —
-                   # taller than the terminal means scroll-jumping every frame)
+PLOT_H = 6         # chart rows per axis (frame is 6*PLOT_H+~5 lines — fits
+                   # a fullscreen terminal without scroll-jumping)
 VMAX = 10.0        # m/s^2 full scale
 AXES = ("x", "y", "z")
 COLORS = ("96", "93", "92")  # cyan, yellow, green
 DASH = "\u2500"    # zero axis
 SOLID = "\u2588"
-LIGHT = "\u2591"
+SHADES = "\u2591\u2592\u2593"  # light/medium/dark partial fill gradient
 
 
 class TiltViz(Node):
@@ -53,16 +53,23 @@ class TiltViz(Node):
         self.draw()
 
     def chart(self, a, color):
-        """One axis chart: rows from +VMAX to -VMAX, label on the top row."""
+        """One axis chart: rows from +VMAX to -VMAX, label on the top row.
+        The row the value lands in is shaded by fill fraction (grayscale
+        leading edge); fully covered rows are solid."""
         rows = []
+        step = VMAX / PLOT_H
         for row in range(PLOT_H, -PLOT_H, -1):
+            top = step * (row + 0.5)
+            bot = step * (row - 0.5)
             line = []
-            top = VMAX * (row + 0.5) / PLOT_H
             for v in self.hist[a]:
                 if row == 0:
-                    line.append(DASH if abs(v) < VMAX / PLOT_H / 2 else SOLID)
+                    line.append(DASH if abs(v) < step / 2 else SOLID)
                 elif v >= top:
                     line.append(SOLID)
+                elif v >= bot:
+                    frac = (v - bot) / step
+                    line.append(SHADES[min(2, int(frac * 3))])
                 else:
                     line.append(" ")
             label = a.upper() if row == PLOT_H else " "

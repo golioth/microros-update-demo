@@ -19,7 +19,7 @@ manifest:
 
     - name: is31fl3731
       revision: v1.0.0
-      url: https://github.com/golioth/led-driver-is31fl3731.git
+      url: git@github.com:golioth/led-driver-is31fl3731.git
       path: deps/modules/lib/is31fl3731
 
     - name: pixel_font

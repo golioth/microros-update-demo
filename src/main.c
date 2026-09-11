@@ -15,6 +15,21 @@
 
 #include "tikk_led_matrix.h"
 
+#ifdef CONFIG_MICROROS
+#include <time.h>
+#include <rcl/rcl.h>
+#include <rcl/error_handling.h>
+#include <rclc/rclc.h>
+#include <rclc/executor.h>
+#include <rmw_microros/rmw_microros.h>
+#include <microros_transports.h>
+#include <geometry_msgs/msg/vector3_stamped.h>
+
+#define MICROROS_PUBLISH_MS 100 /* 10 Hz */
+#define MICROROS_THREAD_STACK 24576
+#define MICROROS_THREAD_PRIO 5
+#endif
+
 #define W 16
 #define H 9
 
@@ -43,6 +58,94 @@ static float ball_y = (H - 1) / 2.0f;
 
 static const struct device *const accel = DEVICE_DT_GET_ANY(st_lis2dh);
 static const struct device *const leds = DEVICE_DT_GET_ANY(issi_is31fl3731);
+
+/* Latest filtered accel sample, shared with the micro-ROS publisher thread.
+ * Torn reads are harmless for telemetry (values are low-passed already). */
+static struct {
+	float x;
+	float y;
+	float z;
+} latest_accel;
+
+#ifdef CONFIG_MICROROS
+static rcl_publisher_t tilt_pub;
+static geometry_msgs__msg__Vector3Stamped tilt_msg;
+
+static void tilt_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
+{
+	RCLC_UNUSED(last_call_time);
+	if (timer == NULL) {
+		return;
+	}
+
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	tilt_msg.header.stamp.sec = ts.tv_sec;
+	tilt_msg.header.stamp.nanosec = ts.tv_nsec;
+	tilt_msg.vector.x = latest_accel.x;
+	tilt_msg.vector.y = latest_accel.y;
+	tilt_msg.vector.z = latest_accel.z;
+
+	rcl_publish(&tilt_pub, &tilt_msg, NULL);
+}
+
+#define RCCHECK(fn)                                                                        \
+	{                                                                                  \
+		rcl_ret_t rc = fn;                                                         \
+		if (rc != RCL_RET_OK) {                                                    \
+			printk("micro-ROS error %d at line %d\n", (int)rc, __LINE__);      \
+			return;                                                            \
+		}                                                                          \
+	}
+
+static void microros_thread(void)
+{
+	zephyr_transport_params_t transport_params = {0};
+
+	printk("micro-ROS: connecting (plug in agent / open serial port)\n");
+
+	rmw_uros_set_custom_transport(
+		MICRO_ROS_FRAMING_REQUIRED,
+		(void *)&transport_params,
+		zephyr_transport_open,
+		zephyr_transport_close,
+		zephyr_transport_write,
+		zephyr_transport_read);
+
+	rcl_allocator_t allocator = rcl_get_default_allocator();
+	rclc_support_t support;
+	RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+
+	rcl_node_t node;
+	RCCHECK(rclc_node_init_default(&node, "tikk_tilt", "", &support));
+
+	RCCHECK(rclc_publisher_init_default(
+		&tilt_pub,
+		&node,
+		ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Vector3Stamped),
+		"tilt"));
+
+	rcl_timer_t timer;
+	RCCHECK(rclc_timer_init_default(&timer, &support,
+					RCL_MS_TO_NS(MICROROS_PUBLISH_MS),
+					tilt_timer_callback));
+
+	rclc_executor_t executor;
+	RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator));
+	RCCHECK(rclc_executor_add_timer(&executor, &timer));
+
+	printk("micro-ROS: publishing /tilt at %d ms\n", MICROROS_PUBLISH_MS);
+
+	while (true) {
+		rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
+		k_msleep(10);
+	}
+}
+
+K_THREAD_DEFINE(microros_tid, MICROROS_THREAD_STACK,
+		microros_thread, NULL, NULL, NULL,
+		MICROROS_THREAD_PRIO, 0, 0);
+#endif /* CONFIG_MICROROS */
 
 static inline float clampf(float val, float lo, float hi)
 {
@@ -117,6 +220,11 @@ static int tick(void)
 
 	double ax = sensor_value_to_double(&a[0]);
 	double ay = sensor_value_to_double(&a[1]);
+	double az = sensor_value_to_double(&a[2]);
+
+	latest_accel.x = (float)ax;
+	latest_accel.y = (float)ay;
+	latest_accel.z = (float)az;
 
 	/* target position: full 1g tilt puts the ball at the edge */
 	float tx = clampf((W - 1) / 2.0f + (AX_SIGN * (float)(ax / 9.81)) * ((W - 1) / 2.0f),

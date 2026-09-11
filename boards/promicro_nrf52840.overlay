@@ -58,3 +58,13 @@
 		};
 	};
 };
+
+/* USB device (nRF52 USBD) for the micro-ROS CDC ACM transport */
+&zephyr_udc0 {
+	status = "okay";
+
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+		label = "CDC_ACM_0";
+	};
+};

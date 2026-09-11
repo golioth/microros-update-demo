@@ -1,0 +1,7 @@
+si swd
+speed 1000
+connect
+loadfile /home/chrisg/golioth/microros/build/app/zephyr/zephyr.hex
+r
+g
+exit

@@ -1,11 +1,13 @@
 /*
  * Tikk liquid tilt display
  *
- * LIS2DH tilt drives a rolling "ball" on the 9x16 IS31FL3731 LED matrix.
- * The ball excites ripples in a simple height-field wave simulation, so the
- * display surface behaves like a shallow pool of liquid.
+ * LIS2DH tilt drives a top-down "pool" of liquid on the 9x16 IS31FL3731
+ * LED matrix. The wave height field is pulled toward a tilt-defined
+ * equilibrium plane, so the water pools toward the low side, sloshes on
+ * fast tilts, and settles calm when the board is flat (with a gentle
+ * ambient shimmer — binary displays do sparkle, not brightness).
  *
- * Single-threaded by design (micro-ROS publisher thread joins later).
+ * Single-threaded by design (micro-ROS publisher thread runs separately).
  */
 
 #include <zephyr/kernel.h>
@@ -35,26 +37,28 @@
 
 #define TICK_MS 50 /* 20 Hz display/sim rate */
 
-/* Wave simulation tuning */
-#define WAVE_K 0.32f    /* propagation stiffness */
-#define WAVE_DAMP 0.90f /* velocity damping per tick */
-#define SURF_THRESH 0.06f /* LED on when height above this */
-#define RIPPLE_AMP 0.65f  /* dip injected per unit ball movement */
-#define AMBIENT_TICKS 60  /* raindrop interval when idle */
+/* Liquid tuning */
+#define WAVE_K 0.00f      /* propagation stiffness — 0: no traveling waves */
+#define WAVE_DAMP 0.80f   /* velocity RETENTION per tick — lower = settles
+			  * faster, no ringing (0.97 rang for ~2s) */
+#define PLANE_PULL 0.14f  /* how hard water is pulled toward the tilted plane */
+#define PLANE_SCALE 0.35f /* full 1g tilt => this much height at display edge */
+#define SURF_THRESH 0.15f /* LED on when water depth above this */
+#define WATER_LEVEL 0.20f /* flat tray: film depth at rest (water everywhere) */
+#define WALL_CLING 0.45f  /* meniscus: how strongly water hugs edges/corners */
+#define SHIMMER_PER_TICK 0   /* off: shimmer was a constant agitation source */
+#define SHIMMER_AMP 0.04f    /* tiny — just enough to glimmer at rest */
 
-/* Ball follows tilt, low-passed */
-#define TILT_LP 0.18f
+/* Orientation mapping — flip signs at bring-up if water pools the wrong way */
+#define AX_SIGN (-1.0f)
+#define AY_SIGN (-1.0f)
 
-/* Orientation mapping — flip signs/axes at bring-up if the ball moves the
- * wrong way for how the board is held. */
-#define AX_SIGN 1.0f
-#define AY_SIGN 1.0f
+/* Tilt low-pass: raw accel noise would jiggle the equilibrium plane and
+ * keep the water perpetually agitated. Filter it. */
+#define TILT_LP 0.2f
 
 static float h[H][W];
 static float v[H][W];
-
-static float ball_x = (W - 1) / 2.0f;
-static float ball_y = (H - 1) / 2.0f;
 
 static const struct device *const accel = DEVICE_DT_GET_ANY(st_lis2dh);
 static const struct device *const leds = DEVICE_DT_GET_ANY(issi_is31fl3731);
@@ -152,6 +156,16 @@ static inline float clampf(float val, float lo, float hi)
 	return val < lo ? lo : (val > hi ? hi : val);
 }
 
+/* cheap xorshift for ambient shimmer */
+static uint32_t rng_state = 0x1234abcd;
+static inline uint32_t rng_next(void)
+{
+	rng_state ^= rng_state << 13;
+	rng_state ^= rng_state >> 17;
+	rng_state ^= rng_state << 5;
+	return rng_state;
+}
+
 static void ripple_at(int x, int y, float amp)
 {
 	if (x < 0 || x >= W || y < 0 || y >= H) {
@@ -160,9 +174,11 @@ static void ripple_at(int x, int y, float amp)
 	v[y][x] -= amp;
 }
 
-static void wave_step(void)
+static void wave_step(float gx, float gy)
 {
-	/* velocity update from Laplacian of height (using current heights) */
+	/* velocity update: Laplacian propagation + pull toward the "bowl +
+	 * tilted plane" equilibrium (concave bowl: water pools center at rest,
+	 * tilt plane drags the pool toward the low side) */
 	for (int y = 0; y < H; y++) {
 		for (int x = 0; x < W; x++) {
 			float n = 0.0f;
@@ -174,7 +190,28 @@ static void wave_step(void)
 			if (y < H - 1) { n += h[y + 1][x]; c++; }
 
 			float lap = (n / (float)c) - h[y][x];
-			v[y][x] = (v[y][x] + WAVE_K * lap) * WAVE_DAMP;
+			float dx = x - (W - 1) / 2.0f;
+			float dy = y - (H - 1) / 2.0f;
+
+			/* flat tray of water, tilted by gravity: film covers
+			 * everything at rest, drains toward the low side on tilt */
+			float eq = WATER_LEVEL + PLANE_SCALE * (gx * dx + gy * dy);
+
+			/* meniscus: water clings to tray walls — distance to
+			 * nearest display edge; bonus decays with depth into
+			 * the tray. This keeps water in corners past the flat
+			 * waterline and makes the corner waterline concave. */
+			int d = x;
+			if (W - 1 - x < d) { d = W - 1 - x; }
+			if (y < d) { d = y; }
+			if (H - 1 - y < d) { d = H - 1 - y; }
+			eq += WALL_CLING / (1.0f + (float)d);
+
+			if (eq < 0.0f) {
+				eq = 0.0f;
+			}
+			v[y][x] = (v[y][x] + WAVE_K * lap + PLANE_PULL * (eq - h[y][x]))
+				  * WAVE_DAMP;
 		}
 	}
 
@@ -197,11 +234,6 @@ static void render(void)
 			}
 		}
 	}
-
-	/* ball pixel always on */
-	int bx = (int)clampf(ball_x, 0, W - 1);
-	int by = (int)clampf(ball_y, 0, H - 1);
-	fb[by] |= (uint16_t)(1 << bx);
 
 	display_framebuffer(leds, fb);
 }
@@ -226,38 +258,20 @@ static int tick(void)
 	latest_accel.y = (float)ay;
 	latest_accel.z = (float)az;
 
-	/* target position: full 1g tilt puts the ball at the edge */
-	float tx = clampf((W - 1) / 2.0f + (AX_SIGN * (float)(ax / 9.81)) * ((W - 1) / 2.0f),
-			  0, W - 1);
-	float ty = clampf((H - 1) / 2.0f + (AY_SIGN * (float)(ay / 9.81)) * ((H - 1) / 2.0f),
-			  0, H - 1);
+	/* tilt direction -> slope of the equilibrium water plane (filtered:
+	 * raw sensor noise never stops agitating the water) */
+	static float fgx, fgy;
+	float gx = clampf(AX_SIGN * (float)(ax / 9.81), -1.0f, 1.0f);
+	float gy = clampf(AY_SIGN * (float)(ay / 9.81), -1.0f, 1.0f);
+	fgx += (gx - fgx) * TILT_LP;
+	fgy += (gy - fgy) * TILT_LP;
 
-	float px = ball_x;
-	float py = ball_y;
-	ball_x += (tx - ball_x) * TILT_LP;
-	ball_y += (ty - ball_y) * TILT_LP;
-
-	float dx = ball_x - px;
-	float dy = ball_y - py;
-	float moved = dx * dx + dy * dy;
-
-	if (moved > 0.0025f) {
-		ripple_at((int)clampf(ball_x, 0, W - 1),
-			  (int)clampf(ball_y, 0, H - 1),
-			  RIPPLE_AMP * clampf(moved * 8.0f, 0.2f, 1.5f));
-	} else if ((ticks % AMBIENT_TICKS) == 0) {
-		/* idle raindrop at the ball position */
-		ripple_at((int)clampf(ball_x, 0, W - 1),
-			  (int)clampf(ball_y, 0, H - 1),
-			  0.5f);
-	}
-
-	wave_step();
+	wave_step(fgx, fgy);
 	render();
 
 	if ((ticks % 100) == 0) {
-		printk("tick %u: ax=%.2f ay=%.2f ball=(%.1f,%.1f)\n",
-		       ticks, ax, ay, ball_x, ball_y);
+		printk("tick %u: gx=%.2f gy=%.2f ax=%.2f ay=%.2f\n",
+		       ticks, gx, gy, ax, ay);
 	}
 	ticks++;
 

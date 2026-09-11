@@ -19,6 +19,9 @@
 
 #define BANNER "CANONICAL"
 
+/* Global display brightness (percent). 20 was retina-searing at the bench. */
+#define DISPLAY_BRIGHTNESS 10
+
 /**
  * @brief Fill all 18 8-bit channels of pixel data from a 9-row uint16_t framebuffer
  *
@@ -134,6 +137,10 @@ void display_framebuffer(const struct device *dev, uint16_t *fb)
     uint8_t write_frame = back_frame ^ 1;
 
     is31fl3731_set_picture_mode(dev);
+    /* Brightness is per-frame — must set it on every frame we write,
+     * or the display alternates between two brightness levels each flip */
+    is31fl3731_select_frame_to_write(dev, write_frame);
+    is31fl3731_frame_set_brightness(dev, DISPLAY_BRIGHTNESS);
     fill_frame_from_buffer(dev, fb, write_frame, false, false);
     is31fl3731_picture_set_display_frame(dev, write_frame);
     back_frame = write_frame;

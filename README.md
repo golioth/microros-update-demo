@@ -53,16 +53,38 @@ Then from any ROS 2 machine/container:
 
 ## How it works
 
-- LIS2DH polled at 20 Hz; low-pass filtered tilt sets a ball position target
-- Ball movement injects impulses into a height-field wave sim (9x16 floats)
-- Surface thresholded to on/off pixels; ball pixel forced on
+- LIS2DH polled at 20 Hz; low-pass filtered tilt tilts the water's
+  equilibrium plane (unfiltered accel noise keeps the water agitated)
+- "Flat tray + meniscus" liquid model: at rest a water film covers the whole
+  display; tilt drains it toward the low side/corners. A wall-cling term
+  keeps water hugging edges and corners slightly past the flat waterline,
+  giving the concave corner meniscus
+- Binary threshold render: depth > SURF_THRESH = LED on
 - micro-ROS thread publishes `geometry_msgs/Vector3Stamped` (filtered accel,
   m/s^2) on `/tilt` at 10 Hz over USB CDC ACM to the agent
 
 ## Tuning knobs (app/src/main.c)
 
-- `WAVE_K`, `WAVE_DAMP`, `SURF_THRESH`, `RIPPLE_AMP` — wave look/feel
-- `AX_SIGN` / `AY_SIGN` — flip if ball moves the wrong way for board orientation
+- `WATER_LEVEL` — resting film depth; lower = water retreats to corners with less tilt
+- `WALL_CLING` — how strongly water hugs edges/corners (meniscus strength)
+- `PLANE_SCALE` — how far a given tilt moves the water
+- `PLANE_PULL` — how fast water chases its equilibrium
+- `WAVE_DAMP` — velocity RETENTION per tick; lower = settles faster (0.97 rings ~2s, 0.80 settles in ~0.5s)
+- `WAVE_K` — wave propagation stiffness; 0 = no traveling waves
+- `TILT_LP` — tilt filter responsiveness; higher = snappier but noisier
+- `AX_SIGN` / `AY_SIGN` — flip if water pools the wrong way
+- `DISPLAY_BRIGHTNESS` (modules/tikk-led-matrix/tikk_led_matrix.c) — 0-100
+
+## Flashing (J-Link jig)
+
+The board is flashed via a J-Link on a custom jig that clips onto the
+component side (which faces the LEDs — unclip to view the display):
+
+    JLinkExe -device nRF52840_xxAA -if SWD -speed 1000 -CommandFile app/flash.jlink
+
+The app links directly at 0x0 (`CONFIG_BOARD_HAS_NRF5_BOOTLOADER=n`); do NOT
+flash build/merged.hex — it only contains the app at 0x1000 behind an MBR
+that isn't included, which bricks boot (this bit us once).
 
 ## Notes / TODO
 

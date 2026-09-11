@@ -1,0 +1,4 @@
+name: tikk_led_matrix
+build:
+  cmake: .
+  kconfig: Kconfig

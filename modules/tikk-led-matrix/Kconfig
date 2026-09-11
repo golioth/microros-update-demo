@@ -1,0 +1,6 @@
+config TIKK_LED_MATRIX
+    bool "Enable the Tikk LED Matrix library"
+    default n
+    depends on IS31FL3731
+    help
+      Helper library for the Tikk board for features like scrolling arrows and displaying text.

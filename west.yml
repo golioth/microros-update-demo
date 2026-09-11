@@ -1,0 +1,37 @@
+# Tikk micro-ROS liquid tilt display
+#
+# Workspace layout mirrors tikk-fleet:
+#   ~/golioth/microros/          <- workspace root (.venv, .west, deps/, build/)
+#   app/                         <- this repo (the application)
+#
+# Revisions match tikk-fleet (known-good on this machine):
+#   nrf v3.0.1 -> zephyr v4.0.99-ncs1-1 (NCS fork)
+#
+manifest:
+  version: 1.0
+
+  projects:
+    - name: nrf
+      revision: v3.0.1
+      url: https://github.com/nrfconnect/sdk-nrf
+      import:
+        path-prefix: deps
+
+    - name: is31fl3731
+      revision: v1.0.0
+      url: https://github.com/golioth/led-driver-is31fl3731.git
+      path: deps/modules/lib/is31fl3731
+
+    - name: pixel_font
+      revision: f180302aa6199cc4b33b36b7d14b83893ea24898
+      url: https://github.com/rzodkiem/Adek_wyswietlacz
+      path: deps/modules/lib/pixel_font
+
+    # micro-ROS Zephyr port (kilted branch, tested vs Zephyr 4.0.0/4.1.0)
+    - name: micro_ros_zephyr_module
+      revision: 229ffc0e131ee7942db3bb2e731fb8851583bb25
+      url: https://github.com/micro-ROS/micro_ros_zephyr_module
+      path: deps/modules/lib/micro_ros_zephyr_module
+
+  self:
+    path: app

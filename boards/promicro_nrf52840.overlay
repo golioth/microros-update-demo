@@ -1,0 +1,60 @@
+/*
+ * Tikk add-on board hardware (from tikk-fleet tikk-pouch-demo overlay):
+ *   - I2C1 on P1.06 (SDA) / P1.04 (SCL)
+ *   - LIS2DH accelerometer @ 0x18
+ *   - IS31FL3731 LED matrix driver @ 0x74 (SDB pin on P1.13)
+ *   - Add-on VCC power rail switch on P0.13 (regulator, on at boot)
+ *
+ * Stripped vs tikk-pouch-demo: buttons, longpress, littlefs, tmp112.
+ */
+
+/ {
+
+	reg_vcc_pin_3v3: reg-vcc-pin-3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "reg-vcc-pin-3v3";
+		enable-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+		regulator-boot-on;
+	};
+};
+
+&reg0 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "disabled";
+};
+
+&i2c1 {
+	status = "okay";
+
+	accel_driver: lis2dh@18 {
+		compatible = "st,lis2dh";
+		reg = <0x18>;
+	};
+
+	led_driver: is31fl3731@74 {
+		compatible = "issi,is31fl3731";
+		reg = <0x74>;
+		sdb-gpios = <&gpio1 13 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&pinctrl {
+	i2c1_default: i2c1_default {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 1, 6)>,
+				<NRF_PSEL(TWIM_SCL, 1, 4)>;
+			bias-pull-up;
+		};
+	};
+
+	i2c1_sleep: i2c1_sleep {
+		group1 {
+			psels = <NRF_PSEL(TWIM_SDA, 1, 6)>,
+				<NRF_PSEL(TWIM_SCL, 1, 4)>;
+			low-power-enable;
+		};
+	};
+};

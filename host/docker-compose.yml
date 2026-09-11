@@ -1,0 +1,15 @@
+services:
+  microros-agent:
+    image: microros/micro-ros-agent:kilted
+    container_name: microros-agent
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      # Fast DDS shared-memory transport silently drops data across
+      # container /dev/shm boundaries — force UDP
+      FASTDDS_BUILTIN_TRANSPORTS: UDPv4
+    devices:
+      - /dev/ttyACM1:/dev/ttyACM1
+    command: serial --dev /dev/ttyACM1 -b 115200 -v6
+    # ttyACM1 = micro-ROS CDC ("CDC_ACM_0"); ttyACM0 is the console port.
+    # Adjust if the enumeration order changes.

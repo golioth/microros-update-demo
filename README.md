@@ -10,10 +10,11 @@ first; pouch transport gets glued in later.
 
 ## Layout
 
-- `app/` — this repo (Zephyr application + tikk-led-matrix module copy)
+- `app/` — this repo (Zephyr application + tikk-led-matrix module copy +
+  host-side agent & viz in app/host/)
+  - `app/host/` — host-side micro-ROS agent (docker compose) + viz.py
 - `deps/` — west workspace modules (NCS v3.0.1 / zephyr v4.0.99-ncs1-1,
   is31fl3731 driver, pixel_font, micro_ros_zephyr_module)
-- `host/` — host-side micro-ROS agent (docker compose)
 - `.venv/` — python venv (west + build deps)
 
 ## Setup
@@ -44,7 +45,7 @@ build — expect several minutes. Subsequent builds are incremental.
 
 ## Run the micro-ROS agent (host)
 
-    cd host && docker compose up -d
+    cd app/host && docker compose up -d
 
 ## Visualizing /tilt
 
@@ -55,7 +56,7 @@ The agent and any ROS 2 containers must set `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`
 Live scrolling charts (x/y/z) in the terminal:
 
     docker run --rm --net=host -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
-      -v ~/golioth/microros/host:/host:ro ros:kilted-ros-core \
+      -v ~/golioth/microros/app/host:/host:ro ros:kilted-ros-core \
       python3 /host/viz.py
 
 Plain message stream:

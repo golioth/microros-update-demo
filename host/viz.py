@@ -30,7 +30,8 @@ from std_msgs.msg import Float32
 HIST = 60          # samples kept (~6 s at 10 Hz for tilt; 60 s at 1 Hz for temp)
 PLOT_H = 5         # chart rows per axis — with the temp panel the total
                    # frame stays ≤ 40 lines, so it fits a fullscreen terminal
-TEMP_H = 3         # rows for the temp panel
+TEMP_H = 5         # rows for the temp panel (rule under it dropped to keep
+                   # the total frame ≤ 42 lines — clipping threshold is ~45)
 VMAX = 10.0        # m/s^2 full scale
 AXES = ("x", "y", "z")
 COLORS = ("96", "93", "92")  # cyan, yellow, green
@@ -147,7 +148,7 @@ class TiltViz(Node):
                 else:
                     line.append(" ")
             if row == TEMP_H:
-                tag = f"\033[90m{hi:5.1f}\033[0m"
+                tag = f"\033[90m{lo + span:5.1f}\033[0m"
             elif row == 1:
                 tag = f"\033[90m{lo:5.1f}\033[0m"
             else:
@@ -173,7 +174,8 @@ class TiltViz(Node):
         out.append(" " + head)
         for line in self.chart_temp():
             out.append(f" {line}")
-        out.append(rule)
+        # (no trailing rule — TEMP_H=5 needs those lines; the footer closes
+        # the frame. Total stays 42 lines, under the ~45-line clip.)
         out.append(f" {time.strftime('%H:%M:%S')}  ctrl-c to quit")
 
         # single write + flush: no line-by-line flicker

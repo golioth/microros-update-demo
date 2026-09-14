@@ -55,9 +55,12 @@ display work independently first; pouch transport gets glued in later.
     # Apply the local module patches (see patches/) — 0001 because colcon
     # caches CMake flags across libc/Kconfig changes and stale flags break
     # the cross-build; 0002 defines __STDC_WANT_LIB_EXT1__=1 for all
-    # micro-ROS packages (fixes picolibc/rcutils Annex K __errno_t error):
+    # micro-ROS packages (fixes picolibc/rcutils Annex K __errno_t error);
+    # 0003 fixes the transports' RX ring buffer aliasing the TX buffer's
+    # storage (random session-establishment corruption/wedges):
     git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0001-colcon-cmake-clean-cache.patch
     git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0002-picolibc-annex-k-cflags.patch
+    git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0003-transport-rx-buffer-aliasing.patch
 
     uv pip install -r deps/zephyr/scripts/requirements.txt -r deps/nrf/scripts/requirements.txt
     uv pip install colcon-common-extensions catkin_pkg empy lark

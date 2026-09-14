@@ -1,0 +1,26 @@
+diff --git a/modules/libmicroros/microros_transports/serial-usb/microros_transports.c b/modules/libmicroros/microros_transports/serial-usb/microros_transports.c
+index 289e382..79166b7 100644
+--- a/modules/libmicroros/microros_transports/serial-usb/microros_transports.c
++++ b/modules/libmicroros/microros_transports/serial-usb/microros_transports.c
+@@ -83,7 +83,7 @@ bool zephyr_transport_open(struct uxrCustomTransport * transport){
+     }
+ 
+     ring_buf_init(&out_ringbuf, sizeof(uart_out_buffer), uart_out_buffer);
+-    ring_buf_init(&in_ringbuf, sizeof(uart_in_buffer), uart_out_buffer);
++    ring_buf_init(&in_ringbuf, sizeof(uart_in_buffer), uart_in_buffer);
+ 
+     printk("Waiting for agent connection\n");
+ 
+diff --git a/modules/libmicroros/microros_transports/serial/microros_transports.c b/modules/libmicroros/microros_transports/serial/microros_transports.c
+index e2eea50..a766e7b 100644
+--- a/modules/libmicroros/microros_transports/serial/microros_transports.c
++++ b/modules/libmicroros/microros_transports/serial/microros_transports.c
+@@ -59,7 +59,7 @@ bool zephyr_transport_open(struct uxrCustomTransport * transport){
+         return false;
+     }
+ 
+-    ring_buf_init(&in_ringbuf, sizeof(uart_in_buffer), uart_out_buffer);
++    ring_buf_init(&in_ringbuf, sizeof(uart_in_buffer), uart_in_buffer);
+ 
+     uart_irq_callback_set(params->uart_dev, uart_fifo_callback);
+ 

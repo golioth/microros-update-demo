@@ -35,7 +35,8 @@ VMAX = 10.0        # m/s^2 full scale
 AXES = ("x", "y", "z")
 COLORS = ("96", "93", "92")  # cyan, yellow, green
 TEMP_COLOR = "95"            # magenta
-DASH = "\u2500"    # zero axis
+DASH = "\u2500"    # (unused; kept for reference)
+AXIS = "="         # zero-crossing axis marker (always drawn, white)
 SOLID = "\u2588"
 SHADES = "\u2591\u2592\u2593"  # light/medium/dark partial fill gradient
 TEMP_MIN_SPAN = 0.5  # deg C — chart floor so a steady reading doesn't collapse
@@ -75,7 +76,9 @@ class TiltViz(Node):
     def chart(self, a, color):
         """One axis chart: rows from +VMAX to -VMAX, label on the top row.
         The row the value lands in is shaded by fill fraction (grayscale
-        leading edge); fully covered rows are solid."""
+        leading edge); fully covered rows are solid. The zero-crossing row
+        is ALWAYS a white '=' axis line — data never overwrites it, so the
+        crossing point stays legible while traces move through it."""
         rows = []
         step = VMAX / PLOT_H
         for row in range(PLOT_H, -PLOT_H, -1):
@@ -84,7 +87,7 @@ class TiltViz(Node):
             line = []
             for v in self.hist[a]:
                 if row == 0:
-                    line.append(DASH if abs(v) < step / 2 else SOLID)
+                    line.append(AXIS)
                 elif v >= top:
                     line.append(SOLID)
                 elif v >= bot:
@@ -93,7 +96,11 @@ class TiltViz(Node):
                 else:
                     line.append(" ")
             label = a.upper() if row == PLOT_H else " "
-            rows.append(f"\033[{color}m{''.join(line)}\033[0m {label}")
+            if row == 0:
+                # bright white axis row, independent of the axis color
+                rows.append(f"\033[97m{''.join(line)}\033[0m {label}")
+            else:
+                rows.append(f"\033[{color}m{''.join(line)}\033[0m {label}")
         return rows
 
     def chart_temp(self):

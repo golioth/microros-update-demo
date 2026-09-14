@@ -1,14 +1,41 @@
 # Tikk micro-ROS Liquid Tilt Display
 
-Zephyr app for the [Tikk](../tikk-fleet) board (promicro_nrf52840 + add-on):
-tilt the board and a "ball" rolls around a 9x16 LED matrix, exciting ripples in
-a simple wave simulation — like a shallow pool of liquid. Tilt data is also
-published over USB-CDC micro-ROS to a host agent.
+Zephyr app for the [Tikk](https://github.com/golioth/tikk-fleet) board
+(promicro_nrf52840 + add-on): a pool of "liquid" lives on the 9x16 LED matrix —
+calm and covering the display at rest, draining toward the low side with a
+concave corner waterline as you tilt, sloshing briefly on fast moves. Tilt data
+is published over USB-CDC micro-ROS to a host agent.
 
-No pouch/BLE/mcuboot by design — micro-ROS and the display work independently
-first; pouch transport gets glued in later.
+## Progress (updated 2026-09-11)
 
-## Layout
+**Working, verified on hardware:**
+- [x] West workspace (NCS v3.0.1 / zephyr v4.0.99-ncs1-1, SDK 0.17.0) mirroring tikk-fleet
+- [x] LIS2DH accelerometer + IS31FL3731 9x16 LED matrix on the Tikk add-on board
+- [x] Liquid display model, converged after six iterations:
+      flat water film everywhere at rest + gravity tilt plane + wall-cling
+      meniscus (concave corner waterline), calm settle, one honest slosh on
+      big moves
+- [x] micro-ROS firmware: `geometry_msgs/Vector3Stamped` on `/tilt` at 10 Hz
+      over USB CDC ACM (node `tikk_tilt`), independent from the display sim
+- [x] micro-ROS agent (docker, `microros/micro-ros-agent:kilted`) bridging the
+      board into a live ROS 2 graph
+- [x] Live terminal visualization of x/y/z tilt (`app/host/viz.py` — ANSI
+      scrolling charts with grayscale shading, no dependencies)
+- [x] On-hardware bring-up complete: boot, flashing, USB, display physics all
+      sorted (see git history for the full debugging saga)
+
+**Next up:**
+- [ ] Pouch/Golioth transport integration — blocked on a libc conflict:
+      libmicroros is built against newlib while pouch expects picolibc
+      (known, documented; needs a build spike or a patch upstream)
+- [ ] Per-LED PWM for grayscale water — needs is31fl3731 driver PWM-page
+      burst support (display is currently binary on/off)
+
+## Workspace layout
+
+This repo is the `app/` directory of a west workspace rooted at
+`~/golioth/microros`. No pouch/BLE/mcuboot by design — micro-ROS and the
+display work independently first; pouch transport gets glued in later.
 
 - `app/` — this repo (Zephyr application + tikk-led-matrix module copy +
   host-side agent & viz in app/host/)

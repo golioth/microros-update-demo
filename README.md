@@ -78,6 +78,20 @@ build — expect several minutes. Subsequent builds are incremental.
 
 ## Run the micro-ROS agent (host)
 
+Bring-up order matters (the firmware's agent handshake is one-shot and
+fail-fast): reset/power the board FIRST (it parks at "Waiting for agent
+connection"), THEN start the agent — its port-open is the handshake
+trigger. After any board reset/replug, recreate the agent container
+(`--force-recreate`, not `restart`) so its device bind re-resolves.
+
+One-time host setup — keep ModemManager off the board's CDC ports (it
+probes ttyACM1 at every enumeration, asserts DTR, and burns the
+handshake; see the rule file for the full story):
+
+    sudo cp app/host/99-microros-zephyr-cdc.rules /etc/udev/rules.d/
+    sudo udevadm control --reload-rules
+    sudo systemctl stop ModemManager
+
     cd app/host && docker compose up -d
 
 ## Visualizing /tilt

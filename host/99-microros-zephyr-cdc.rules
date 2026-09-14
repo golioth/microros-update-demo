@@ -1,0 +1,15 @@
+# ModemManager ignores the Tikk board's Zephyr CDC device (console + micro-ROS).
+# Without this, MM opens ttyACM1 at every USB enumeration (boot/reset/replug)
+# to probe for a modem. That asserts DTR, which unblocks the firmware's
+# micro-ROS transport and fires its one-shot, fail-fast agent handshake into
+# MM's probe — the client dies ("micro-ROS error 1 at line 126") and the app
+# needs a reboot. With the rule, the client parks at the DTR wait until the
+# real agent opens the port, making the bring-up deterministic.
+#
+# Install (one-time, per host):
+#   sudo cp 99-microros-zephyr-cdc.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo systemctl stop ModemManager   # current session; rule handles the rest
+#
+# VID:PID 2fe3:0100 = "NordicSemiconductor Zephyr micro-ROS" (lsusb).
+ATTRS{idVendor}=="2fe3", ATTRS{idProduct}=="0100", ENV{ID_MM_DEVICE_IGNORE}="1"

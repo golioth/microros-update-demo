@@ -52,10 +52,12 @@ display work independently first; pouch transport gets glued in later.
     source .venv/bin/activate
     west update
 
-    # Apply the local module patch (see patches/) — needed because colcon
+    # Apply the local module patches (see patches/) — 0001 because colcon
     # caches CMake flags across libc/Kconfig changes and stale flags break
-    # the cross-build:
+    # the cross-build; 0002 defines __STDC_WANT_LIB_EXT1__=1 for all
+    # micro-ROS packages (fixes picolibc/rcutils Annex K __errno_t error):
     git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0001-colcon-cmake-clean-cache.patch
+    git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0002-picolibc-annex-k-cflags.patch
 
     uv pip install -r deps/zephyr/scripts/requirements.txt -r deps/nrf/scripts/requirements.txt
     uv pip install colcon-common-extensions catkin_pkg empy lark
@@ -63,9 +65,11 @@ display work independently first; pouch transport gets glued in later.
 ## Build & flash
 
 SDK 0.17.0 is required (matches tikk-fleet; SDK 0.17.4's picolibc conflicts
-with zephyr v4.0.99-ncs1-1):
+with zephyr v4.0.99-ncs1-1). Use the ABSOLUTE path — `~/`-relative paths
+silently resolve wrong in non-login shells (e.g. agent sessions where $HOME
+is overridden), and Zephyr then auto-detects 0.17.4 instead:
 
-    ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.0 west build -b promicro_nrf52840 app
+    ZEPHYR_SDK_INSTALL_DIR=/home/chrisg/zephyr-sdk-0.17.0 west build -b promicro_nrf52840 app
 
 First build cross-compiles all of micro-ROS (~25 ROS 2 repos) as part of the
 build — expect several minutes. Subsequent builds are incremental.

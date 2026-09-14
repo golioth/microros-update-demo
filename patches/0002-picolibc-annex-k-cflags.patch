@@ -1,0 +1,23 @@
+diff --git a/modules/libmicroros/libmicroros.mk b/modules/libmicroros/libmicroros.mk
+index 482dc73..9e4a7f5 100644
+--- a/modules/libmicroros/libmicroros.mk
++++ b/modules/libmicroros/libmicroros.mk
+@@ -10,6 +10,19 @@ endif
+ CFLAGS_INTERNAL := $(X_CFLAGS)
+ CXXFLAGS_INTERNAL := $(X_CXXFLAGS)
+ 
++# picolibc: rcutils enables Annex K mid-translation-unit (#define
++# __STDC_WANT_LIB_EXT1__ 1 in error_handling.h), but picolibc only typedefs
++# __errno_t/__rsize_t in sys/_types.h when the macro is already set at FIRST
++# include. Once sys/_types.h's include guard has locked it out, stdlib.h's
++# Annex K block references __errno_t -> "unknown type name '__errno_t'".
++# Defining it globally for C makes every C TU consistent from the first
++# include. C++ TUs that pull rcutils/error_handling.h get Annex K active too,
++# but picolibc 1.8.8's Annex K block uses bare `restrict` — not a keyword in
++# C++ (fixed upstream in 1.8.10 as `__restrict`) — so remap the token for
++# C++ flags only. No micro-ROS C++ code uses `restrict` as an identifier.
++CFLAGS_INTERNAL := -D__STDC_WANT_LIB_EXT1__=1 $(CFLAGS_INTERNAL)
++CXXFLAGS_INTERNAL := -Drestrict=__restrict__ $(CXXFLAGS_INTERNAL)
++
+ CFLAGS_INTERNAL := -c -I$(ZEPHYR_BASE)/include/posix -I$(PROJECT_BINARY_DIR)/include/generated $(CFLAGS_INTERNAL)
+ CXXFLAGS_INTERNAL := -c -I$(ZEPHYR_BASE)/include/posix -I$(PROJECT_BINARY_DIR)/include/generated $(CXXFLAGS_INTERNAL)

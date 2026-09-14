@@ -28,15 +28,14 @@ from geometry_msgs.msg import Vector3Stamped
 from std_msgs.msg import Float32
 
 HIST = 60          # samples kept (~6 s at 10 Hz for tilt; 60 s at 1 Hz for temp)
-PLOT_H = 6         # chart rows per axis (frame is 6*PLOT_H+~5 lines — fits
-                   # a fullscreen terminal without scroll-jumping)
-TEMP_H = 3         # rows for the temp panel
+PLOT_H = 5         # chart rows per axis — with the temp panel the total
+                   # frame stays ≤ 40 lines, so it fits a fullscreen terminal
+TEMP_H = 2         # rows for the temp panel
 VMAX = 10.0        # m/s^2 full scale
 AXES = ("x", "y", "z")
 COLORS = ("96", "93", "92")  # cyan, yellow, green
 TEMP_COLOR = "95"            # magenta
-DASH = "\u2500"    # (unused; kept for reference)
-AXIS = "="         # zero-crossing axis marker (always drawn, white)
+DASH = "\u2500"    # zero row: dash when near zero
 SOLID = "\u2588"
 SHADES = "\u2591\u2592\u2593"  # light/medium/dark partial fill gradient
 TEMP_MIN_SPAN = 0.5  # deg C — chart floor so a steady reading doesn't collapse
@@ -74,11 +73,11 @@ class TiltViz(Node):
         self.draw()
 
     def chart(self, a, color):
-        """One axis chart: rows from +VMAX to -VMAX, label on the top row.
-        The row the value lands in is shaded by fill fraction (grayscale
-        leading edge); fully covered rows are solid. The zero-crossing row
-        is ALWAYS a white '=' axis line — data never overwrites it, so the
-        crossing point stays legible while traces move through it."""
+        """One axis chart: rows from +VMAX to -VMAX. The row the value
+        lands in is shaded by fill fraction (grayscale leading edge);
+        fully covered rows are solid. The zero row is a colored line of
+        dashes (near zero) or blocks (crossing) in the axis color, and the
+        label row carries the live numeric readout."""
         rows = []
         step = VMAX / PLOT_H
         for row in range(PLOT_H, -PLOT_H, -1):
@@ -87,7 +86,7 @@ class TiltViz(Node):
             line = []
             for v in self.hist[a]:
                 if row == 0:
-                    line.append(AXIS)
+                    line.append(DASH if abs(v) < step / 2 else SOLID)
                 elif v >= top:
                     line.append(SOLID)
                 elif v >= bot:
@@ -95,12 +94,11 @@ class TiltViz(Node):
                     line.append(SHADES[min(2, int(frac * 3))])
                 else:
                     line.append(" ")
-            label = a.upper() if row == PLOT_H else " "
-            if row == 0:
-                # bright white axis row, independent of the axis color
-                rows.append(f"\033[97m{''.join(line)}\033[0m {label}")
+            if row == PLOT_H:
+                tag = f"{a.upper()} {self.last[a]:+6.2f}"
             else:
-                rows.append(f"\033[{color}m{''.join(line)}\033[0m {label}")
+                tag = " "
+            rows.append(f"\033[{color}m{''.join(line)}\033[0m {tag}")
         return rows
 
     def chart_temp(self):

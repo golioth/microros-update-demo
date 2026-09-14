@@ -86,6 +86,9 @@ fail-fast): reset/power the board FIRST (it parks at "Waiting for agent
 connection"), THEN start the agent — its port-open is the handshake
 trigger. After any board reset/replug, recreate the agent container
 (`--force-recreate`, not `restart`) so its device bind re-resolves.
+Conversely, after ANY agent restart/recreate, reset the board again —
+the firmware's client never re-establishes a dead session and will
+publish into the void until rebooted.
 
 One-time host setup — keep ModemManager off the board's CDC ports (it
 probes ttyACM1 at every enumeration, asserts DTR, and burns the

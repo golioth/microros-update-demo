@@ -242,15 +242,21 @@ static void wave_step(float gx, float gy)
 				depth = 0.0f;
 			}
 
-			/* meniscus: water clings to tray walls — distance to
-			 * nearest display edge; bonus decays into the tray.
-			 * Keeps water in corners past the waterline and makes
-			 * the corner waterline concave. */
+			/* meniscus: water clings to tray walls — but only where
+			 * water exists. Gated by the cell's own depth so dry
+			 * border cells don't light as a phantom frame (ungated
+			 * cling put a permanent 2-LED border around the display).
+			 * At the waterline the gate ramps 0..1 over 0.10 depth,
+			 * giving the concave corner climb where water is. */
 			int d = x;
 			if (W - 1 - x < d) { d = W - 1 - x; }
 			if (y < d) { d = y; }
 			if (H - 1 - y < d) { d = H - 1 - y; }
-			float eq = depth + WALL_CLING / (1.0f + (float)d);
+			float gate = depth * 10.0f;
+			if (gate > 1.0f) {
+				gate = 1.0f;
+			}
+			float eq = depth + gate * WALL_CLING / (1.0f + (float)d);
 
 			v[y][x] = (v[y][x] + WAVE_K * lap + PLANE_PULL * (eq - h[y][x]))
 				  * WAVE_DAMP;

@@ -45,10 +45,12 @@
 #define WAVE_DAMP 0.80f   /* velocity RETENTION per tick — lower = settles
 			  * faster, no ringing (0.97 rang for ~2s) */
 #define PLANE_PULL 0.14f  /* how hard water is pulled toward the tilted plane */
-#define PLANE_SCALE 0.35f /* full 1g tilt => this much height at display edge */
+#define PLANE_SCALE 0.35f /* floor tilt: full 1g => this much drop per cell */
 #define SURF_THRESH 0.15f /* LED on when water depth above this */
-#define WATER_LEVEL 0.20f /* flat tray: film depth at rest (water everywhere) */
-#define WALL_CLING 0.45f  /* meniscus: how strongly water hugs edges/corners */
+#define WATER_LEVEL 0.13f /* TOTAL water volume = this x cell count. Flat =>
+			  * uniform film everywhere; long side => ~2-row
+			  * pool at the low edge (volume-conserving fill) */
+#define WALL_CLING 0.35f  /* meniscus: how strongly water hugs edges/corners */
 #define SHIMMER_PER_TICK 0   /* off: shimmer was a constant agitation source */
 #define SHIMMER_AMP 0.04f    /* tiny — just enough to glimmer at rest */
 
@@ -177,42 +179,79 @@ static void ripple_at(int x, int y, float amp)
 	v[y][x] -= amp;
 }
 
+/* tray floor heights + scratch buffer for the per-tick water-fill */
+static float floors[H][W];
+static float sorted_floors[H * W];
+
 static void wave_step(float gx, float gy)
 {
-	/* velocity update: Laplacian propagation + pull toward the "bowl +
-	 * tilted plane" equilibrium (concave bowl: water pools center at rest,
-	 * tilt plane drags the pool toward the low side) */
+	/* Volume-conserving liquid: the tray floor tilts with gravity and a
+	 * FIXED volume of water fills the lowest cells first (water-fill).
+	 * Flat => uniform film covering the display; on its side => the same
+	 * water pools at the low edge — pool size is set by WATER_LEVEL
+	 * (total volume), not by tilt amount. */
+	const float volume = (float)(W * H) * WATER_LEVEL;
+	int count = 0;
+
 	for (int y = 0; y < H; y++) {
 		for (int x = 0; x < W; x++) {
-			float n = 0.0f;
-			int c = 0;
-
-			if (x > 0) { n += h[y][x - 1]; c++; }
-			if (x < W - 1) { n += h[y][x + 1]; c++; }
-			if (y > 0) { n += h[y - 1][x]; c++; }
-			if (y < H - 1) { n += h[y + 1][x]; c++; }
-
-			float lap = (n / (float)c) - h[y][x];
 			float dx = x - (W - 1) / 2.0f;
 			float dy = y - (H - 1) / 2.0f;
+			floors[y][x] = -PLANE_SCALE * (gx * dx + gy * dy);
+			sorted_floors[count++] = floors[y][x];
+		}
+	}
 
-			/* flat tray of water, tilted by gravity: film covers
-			 * everything at rest, drains toward the low side on tilt */
-			float eq = WATER_LEVEL + PLANE_SCALE * (gx * dx + gy * dy);
+	/* insertion sort ascending (105 cells at 20 Hz — trivial) */
+	for (int i = 1; i < count; i++) {
+		float key = sorted_floors[i];
+		int j = i - 1;
+		while (j >= 0 && sorted_floors[j] > key) {
+			sorted_floors[j + 1] = sorted_floors[j];
+			j--;
+		}
+		sorted_floors[j + 1] = key;
+	}
+
+	/* water-fill: raise the surface over the lowest cells until the fixed
+	 * volume is used up; everything above the level stays dry */
+	float cum = sorted_floors[0];
+	float level = volume + cum;
+	int k = 0;
+	while (k < count - 1 && level > sorted_floors[k + 1]) {
+		k++;
+		cum += sorted_floors[k];
+		level = (volume + cum) / (float)(k + 1);
+	}
+
+	/* relax toward (fill depth + meniscus), with momentum for slosh */
+	for (int y = 0; y < H; y++) {
+		for (int x = 0; x < W; x++) {
+			float neigh = 0.0f;
+			int c = 0;
+
+			if (x > 0) { neigh += h[y][x - 1]; c++; }
+			if (x < W - 1) { neigh += h[y][x + 1]; c++; }
+			if (y > 0) { neigh += h[y - 1][x]; c++; }
+			if (y < H - 1) { neigh += h[y + 1][x]; c++; }
+
+			float lap = (neigh / (float)c) - h[y][x];
+
+			float depth = level - floors[y][x];
+			if (depth < 0.0f) {
+				depth = 0.0f;
+			}
 
 			/* meniscus: water clings to tray walls — distance to
-			 * nearest display edge; bonus decays with depth into
-			 * the tray. This keeps water in corners past the flat
-			 * waterline and makes the corner waterline concave. */
+			 * nearest display edge; bonus decays into the tray.
+			 * Keeps water in corners past the waterline and makes
+			 * the corner waterline concave. */
 			int d = x;
 			if (W - 1 - x < d) { d = W - 1 - x; }
 			if (y < d) { d = y; }
 			if (H - 1 - y < d) { d = H - 1 - y; }
-			eq += WALL_CLING / (1.0f + (float)d);
+			float eq = depth + WALL_CLING / (1.0f + (float)d);
 
-			if (eq < 0.0f) {
-				eq = 0.0f;
-			}
 			v[y][x] = (v[y][x] + WAVE_K * lap + PLANE_PULL * (eq - h[y][x]))
 				  * WAVE_DAMP;
 		}

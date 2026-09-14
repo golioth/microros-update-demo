@@ -112,7 +112,9 @@ Then from any ROS 2 machine/container:
 
 ## Tuning knobs (app/src/main.c)
 
-- `WATER_LEVEL` — resting film depth; lower = water retreats to corners with less tilt
+- `WATER_LEVEL` — TOTAL water volume (this × cell count). Flat => uniform film
+  everywhere; resting on the long side => ~2-row pool. Raise/lower to change
+  how much water is in the tray
 - `WALL_CLING` — how strongly water hugs edges/corners (meniscus strength)
 - `PLANE_SCALE` — how far a given tilt moves the water
 - `PLANE_PULL` — how fast water chases its equilibrium

@@ -35,7 +35,10 @@ VMAX = 10.0        # m/s^2 full scale
 AXES = ("x", "y", "z")
 COLORS = ("96", "93", "92")  # cyan, yellow, green
 TEMP_COLOR = "95"            # magenta
-DASH = "\u2500"    # zero row: dash when near zero
+DASH = "\u2500"    # (legacy; unused)
+AXIS = "="         # zero-row marker: white axis line where the trace is
+                   # elsewhere; replaced by a colored block only where the
+                   # trace actually sits on zero
 SOLID = "\u2588"
 SHADES = "\u2591\u2592\u2593"  # light/medium/dark partial fill gradient
 TEMP_MIN_SPAN = 0.5  # deg C — chart floor so a steady reading doesn't collapse
@@ -75,9 +78,11 @@ class TiltViz(Node):
     def chart(self, a, color):
         """One axis chart: rows from +VMAX to -VMAX. The row the value
         lands in is shaded by fill fraction (grayscale leading edge);
-        fully covered rows are solid. The zero row is a colored line of
-        dashes (near zero) or blocks (crossing) in the axis color, and the
-        label row carries the live numeric readout."""
+        fully covered rows are solid. The zero row is a white '=' axis:
+        columns where the trace is within half a row of zero show a
+        colored block (trace crossing the axis); all other columns show
+        the bare axis, never blocks — an off-scale trace must not paint
+        phantom data at zero."""
         rows = []
         step = VMAX / PLOT_H
         for row in range(PLOT_H, -PLOT_H, -1):
@@ -86,7 +91,12 @@ class TiltViz(Node):
             line = []
             for v in self.hist[a]:
                 if row == 0:
-                    line.append(DASH if abs(v) < step / 2 else SOLID)
+                    if abs(v) < step / 2:
+                        # trace sitting on the axis: colored block
+                        line.append(f"\033[{color}m{SOLID}\033[0m")
+                    else:
+                        # trace elsewhere: bare white axis
+                        line.append(f"\033[97m{AXIS}\033[0m")
                 elif v >= top:
                     line.append(SOLID)
                 elif v >= bot:
@@ -98,7 +108,11 @@ class TiltViz(Node):
                 tag = f"{a.upper()} {self.last[a]:+6.2f}"
             else:
                 tag = " "
-            rows.append(f"\033[{color}m{''.join(line)}\033[0m {tag}")
+            if row == 0:
+                # per-column colors above; no outer wrap
+                rows.append(f"{''.join(line)} {tag}")
+            else:
+                rows.append(f"\033[{color}m{''.join(line)}\033[0m {tag}")
         return rows
 
     def chart_temp(self):

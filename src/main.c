@@ -44,7 +44,7 @@
 #define WAVE_K 0.00f      /* propagation stiffness — 0: no traveling waves */
 #define WAVE_DAMP 0.80f   /* velocity RETENTION per tick — lower = settles
 			  * faster, no ringing (0.97 rang for ~2s) */
-#define PLANE_PULL 0.14f  /* how hard water is pulled toward the tilted plane */
+#define PLANE_PULL 0.18f  /* how hard water is pulled toward the tilted plane */
 #define PLANE_SCALE 0.35f /* floor tilt: full 1g => this much drop per cell */
 #define SURF_THRESH 0.15f /* LED on when water depth above this */
 #define WATER_LEVEL 0.13f /* TOTAL water volume = this x cell count. Flat =>
@@ -60,7 +60,7 @@
 
 /* Tilt low-pass: raw accel noise would jiggle the equilibrium plane and
  * keep the water perpetually agitated. Filter it. */
-#define TILT_LP 0.2f
+#define TILT_LP 0.3f
 
 static float h[H][W];
 static float v[H][W];

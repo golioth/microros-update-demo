@@ -81,6 +81,7 @@ static struct {
 static rcl_publisher_t tilt_pub;
 static geometry_msgs__msg__Vector3Stamped tilt_msg;
 
+#ifdef CONFIG_TIKK_TEMP_PUBLISHER
 /* TMP102 on the Tikk add-on (0x48, ti,tmp112 driver) — the OTA "after"
  * payload: readings published on /temp at 1 Hz. */
 static const struct device *const tmp102 = DEVICE_DT_GET_ANY(ti_tmp112);
@@ -124,6 +125,7 @@ static void publish_temp(void)
 		temp_announced = true;
 	}
 }
+#endif /* CONFIG_TIKK_TEMP_PUBLISHER */
 
 static void tilt_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
@@ -142,11 +144,13 @@ static void tilt_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 
 	rcl_publish(&tilt_pub, &tilt_msg, NULL);
 
+#ifdef CONFIG_TIKK_TEMP_PUBLISHER
 	/* /temp at 1 Hz (every 10th 10 Hz tick) */
 	if (++temp_div >= 10) {
 		temp_div = 0;
 		publish_temp();
 	}
+#endif
 }
 
 #define RCCHECK(fn)                                                                        \
@@ -185,11 +189,13 @@ static void microros_thread(void)
 		ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Vector3Stamped),
 		"tilt"));
 
+#ifdef CONFIG_TIKK_TEMP_PUBLISHER
 	RCCHECK(rclc_publisher_init_default(
 		&temp_pub,
 		&node,
 		ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
 		"temp"));
+#endif
 
 	rcl_timer_t timer;
 	RCCHECK(rclc_timer_init_default(&timer, &support,

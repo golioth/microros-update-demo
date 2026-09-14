@@ -155,9 +155,20 @@ component side (which faces the LEDs — unclip to view the display):
 
     JLinkExe -device nRF52840_xxAA -if SWD -speed 1000 -CommandFile app/flash.jlink
 
-The app links directly at 0x0 (`CONFIG_BOARD_HAS_NRF5_BOOTLOADER=n`); do NOT
-flash build/merged.hex — it only contains the app at 0x1000 behind an MBR
-that isn't included, which bricks boot (this bit us once).
+The build now includes MCUboot (sysbuild): mcuboot at 0x0 (64 KB, with
+USB-CDC serial recovery — brick insurance) and the app in slot 0 at
+0x10000. flash.jlink loads `build/merged.hex` (bootloader + app).
+
+Artifact-name trap (bit us once): **`build/mcuboot_primary.hex` is NOT
+"mcuboot + app"** — despite the name it contains ONLY the slot-0 app
+image (starts at 0x10000, no bootloader). Flashing it alone leaves 0x0
+erased and the CPU faults on boot (IACCVIOL, PC in SCB space). The
+historical note below is from the pre-mcuboot era and is now inverted:
+
+(OLD, no-mcuboot builds only: the app linked directly at 0x0 and
+build/merged.hex back then was app@0x1000-behind-an-MBR — bricking.
+With the current mcuboot sysbuild, merged.hex is exactly the right
+thing to flash.)
 
 ## Notes / TODO
 

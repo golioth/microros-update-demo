@@ -1,7 +1,11 @@
 si swd
 speed 1000
 connect
-loadfile /home/chrisg/golioth/microros/build/app/zephyr/zephyr.hex
+# mcuboot build: flash bootloader + slot-0 app together at 0x0.
+# Use merged.hex (mcuboot + app). NOT mcuboot_primary.hex — despite the
+# name it is ONLY the slot-0 app image (no bootloader; flashing it leaves
+# 0x0 erased and the board faults on boot).
+loadfile /home/chrisg/golioth/microros/build/merged.hex
 r
 g
 exit

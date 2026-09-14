@@ -1,0 +1,22 @@
+# Copyright (c) 2026 Golioth, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "Tikk liquid tilt display (micro-ROS)"
+
+# App Kconfig replaces the default root — MUST source Zephyr's chain
+# (which also pulls in all module Kconfigs via Kconfig.modules).
+source "Kconfig.zephyr"
+
+menu "Tikk liquid tilt display"
+
+config TIKK_TEMP_PUBLISHER
+	bool "Publish TMP102 temperature on /temp"
+	default y
+	help
+	  Publishes std_msgs/Float32 (deg C) on /temp at 1 Hz from the
+	  TMP102 on the Tikk add-on board. This is the OTA demo's "after"
+	  payload: the "before" firmware is built with this OFF, the OTA
+	  update delivers a build with it ON.
+
+endmenu

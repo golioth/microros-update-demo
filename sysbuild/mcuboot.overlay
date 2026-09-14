@@ -1,0 +1,26 @@
+/*
+ * MCUboot image overlay: serial-recovery CDC ACM + manual-recovery button
+ * (from tikk-fleet tikk-pouch-demo — P0.11 button on the Tikk add-on).
+ */
+
+/ {
+	buttons {
+		compatible = "gpio-keys";
+
+		button0: button_0 {
+			gpios = <&gpio0 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+		};
+	};
+
+	aliases {
+		sw0 = &button0;
+		mcuboot-button0 = &button0;
+		mcuboot-led0 = &led0;
+	};
+};
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};

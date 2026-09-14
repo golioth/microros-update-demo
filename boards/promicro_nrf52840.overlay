@@ -3,9 +3,11 @@
  *   - I2C1 on P1.06 (SDA) / P1.04 (SCL)
  *   - LIS2DH accelerometer @ 0x18
  *   - IS31FL3731 LED matrix driver @ 0x74 (SDB pin on P1.13)
+ *   - TMP102 temp sensor @ 0x48 (ti,tmp112 driver; the OTA "after" state
+ *     publishes its readings on /temp)
  *   - Add-on VCC power rail switch on P0.13 (regulator, on at boot)
  *
- * Stripped vs tikk-pouch-demo: buttons, longpress, littlefs, tmp112.
+ * Stripped vs tikk-pouch-demo: buttons, longpress, littlefs.
  */
 
 / {
@@ -32,6 +34,11 @@
 	accel_driver: lis2dh@18 {
 		compatible = "st,lis2dh";
 		reg = <0x18>;
+	};
+
+	tmp_driver: tmp102@48 {
+		compatible = "ti,tmp112";
+		reg = <0x48>;
 	};
 
 	led_driver: is31fl3731@74 {

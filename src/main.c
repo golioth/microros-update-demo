@@ -26,6 +26,7 @@
 #include <rmw_microros/rmw_microros.h>
 #include <microros_transports.h>
 #include <geometry_msgs/msg/vector3_stamped.h>
+#include <std_msgs/msg/float32.h>
 
 #define MICROROS_PUBLISH_MS 100 /* 10 Hz */
 #define MICROROS_THREAD_STACK 24576
@@ -80,6 +81,50 @@ static struct {
 static rcl_publisher_t tilt_pub;
 static geometry_msgs__msg__Vector3Stamped tilt_msg;
 
+/* TMP102 on the Tikk add-on (0x48, ti,tmp112 driver) — the OTA "after"
+ * payload: readings published on /temp at 1 Hz. */
+static const struct device *const tmp102 = DEVICE_DT_GET_ANY(ti_tmp112);
+static rcl_publisher_t temp_pub;
+static std_msgs__msg__Float32 temp_msg;
+static uint32_t temp_div;
+static bool temp_announced;
+
+/* One-shot diagnostics — a permanently failing temp path must not be
+ * silent (cost an hour of head-scratching once already). */
+#define TEMP_ERR(msg)                                    \
+	do {                                             \
+		if (!temp_err_shown) {                   \
+			printk("temp: " msg "\n");       \
+			temp_err_shown = true;           \
+		}                                        \
+	} while (0)
+static bool temp_err_shown;
+
+static void publish_temp(void)
+{
+	struct sensor_value val;
+
+	if (tmp102 == NULL || !device_is_ready(tmp102)) {
+		TEMP_ERR("TMP102 not ready");
+		return;
+	}
+	if (sensor_sample_fetch(tmp102) != 0) {
+		TEMP_ERR("TMP102 sample fetch failed");
+		return;
+	}
+	/* tmp112 driver exposes AMBIENT_TEMP (not DIE_TEMP) */
+	if (sensor_channel_get(tmp102, SENSOR_CHAN_AMBIENT_TEMP, &val) != 0) {
+		TEMP_ERR("TMP102 channel get failed");
+		return;
+	}
+	temp_msg.data = (float)sensor_value_to_double(&val);
+	rcl_publish(&temp_pub, &temp_msg, NULL);
+	if (!temp_announced) {
+		printk("TMP102 online: %.2f C\n", (double)temp_msg.data);
+		temp_announced = true;
+	}
+}
+
 static void tilt_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
 	RCLC_UNUSED(last_call_time);
@@ -96,6 +141,12 @@ static void tilt_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 	tilt_msg.vector.z = latest_accel.z;
 
 	rcl_publish(&tilt_pub, &tilt_msg, NULL);
+
+	/* /temp at 1 Hz (every 10th 10 Hz tick) */
+	if (++temp_div >= 10) {
+		temp_div = 0;
+		publish_temp();
+	}
 }
 
 #define RCCHECK(fn)                                                                        \
@@ -133,6 +184,12 @@ static void microros_thread(void)
 		&node,
 		ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Vector3Stamped),
 		"tilt"));
+
+	RCCHECK(rclc_publisher_init_default(
+		&temp_pub,
+		&node,
+		ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+		"temp"));
 
 	rcl_timer_t timer;
 	RCCHECK(rclc_timer_init_default(&timer, &support,

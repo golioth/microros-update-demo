@@ -33,5 +33,17 @@ manifest:
       url: https://github.com/micro-ROS/micro_ros_zephyr_module
       path: deps/modules/lib/micro_ros_zephyr_module
 
+    # Golioth pouch (same revision as tikk-fleet, known-good on this machine).
+    # west-ncs.yml import pins the NCS tree (nrf v3.0.1) — must stay in sync
+    # with the explicit nrf project above.
+    - name: pouch
+      revision: 2d66b836471c03ed9bbee11e5fb033faf94e7a29
+      url: https://github.com/golioth/pouch
+      path: modules/lib/pouch
+      submodules: true
+      import:
+        file: west-ncs.yml
+        path-prefix: deps
+
   self:
     path: app

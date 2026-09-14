@@ -19,4 +19,12 @@ config TIKK_TEMP_PUBLISHER
 	  payload: the "before" firmware is built with this OFF, the OTA
 	  update delivers a build with it ON.
 
+config EXAMPLE_CREDENTIALS_DIR
+	string "Directory containing credentials"
+	default "/lfs1/credentials"
+	help
+	  Directory on mounted file system containing the pouch device
+	  certificate (crt.der) and private key (key.der), provisioned via
+	  MCUmgr/smpmgr.
+
 endmenu

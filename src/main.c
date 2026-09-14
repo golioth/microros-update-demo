@@ -18,7 +18,9 @@
 #include "tikk_led_matrix.h"
 
 #ifdef CONFIG_MICROROS
-#include <time.h>
+#include <zephyr/posix/time.h> /* clock_gettime + CLOCK_REALTIME (picolibc's
+				* <time.h> hides POSIX names without
+				* _POSIX_C_SOURCE, which we no longer set) */
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
 #include <rclc/rclc.h>

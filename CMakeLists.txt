@@ -15,4 +15,7 @@ project(tikk_liquid_microros)
 target_sources(app PRIVATE
   src/main.c
   src/nrf52840_power.c
+  src/pouch_setup.c
+  src/credentials.c
+  src/fw_update.c
 )

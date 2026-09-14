@@ -30,7 +30,7 @@ from std_msgs.msg import Float32
 HIST = 60          # samples kept (~6 s at 10 Hz for tilt; 60 s at 1 Hz for temp)
 PLOT_H = 5         # chart rows per axis — with the temp panel the total
                    # frame stays ≤ 40 lines, so it fits a fullscreen terminal
-TEMP_H = 2         # rows for the temp panel
+TEMP_H = 3         # rows for the temp panel
 VMAX = 10.0        # m/s^2 full scale
 AXES = ("x", "y", "z")
 COLORS = ("96", "93", "92")  # cyan, yellow, green
@@ -131,9 +131,12 @@ class TiltViz(Node):
         span = max(hi - lo, TEMP_MIN_SPAN)
         rows = []
         step = span / TEMP_H
-        for row in range(TEMP_H, -1, -1):
-            top = lo + step * (row + 0.5)
-            bot = lo + step * (row - 0.5)
+        # rows 1..TEMP_H tile [lo, lo+span] exactly — every value in the
+        # observed range lands in a row (the old TEMP_H+1-and-trim version
+        # silently dropped the bottom band, hiding the baseline).
+        for row in range(TEMP_H, 0, -1):
+            top = lo + step * row
+            bot = lo + step * (row - 1)
             line = []
             for v in self.temp_hist:
                 if v >= top:
@@ -143,10 +146,14 @@ class TiltViz(Node):
                     line.append(SHADES[min(2, int(frac * 3))])
                 else:
                     line.append(" ")
-            rows.append(f"\033[{TEMP_COLOR}m{''.join(line)}\033[0m")
-        # trim to TEMP_H rows (loop emits TEMP_H+1 for the same row spacing
-        # math as the axis charts; drop the redundant bottom edge)
-        return rows[:TEMP_H]
+            if row == TEMP_H:
+                tag = f"\033[90m{hi:5.1f}\033[0m"
+            elif row == 1:
+                tag = f"\033[90m{lo:5.1f}\033[0m"
+            else:
+                tag = "     "
+            rows.append(f"\033[{TEMP_COLOR}m{''.join(line)}\033[0m {tag}")
+        return rows
 
     def draw(self):
         out = []

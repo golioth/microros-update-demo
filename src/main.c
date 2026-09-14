@@ -32,8 +32,11 @@
 #define MICROROS_THREAD_PRIO 5
 #endif
 
-#define W 16
-#define H 9
+/* Sim grid = the PHYSICAL display: 7x15 of the IS31FL3731's 9x16 matrix
+ * is populated (rows 0-6, cols 0-14). Simulating the full 9x16 put water
+ * and meniscus in invisible regions. */
+#define W 15
+#define H 7
 
 #define TICK_MS 50 /* 20 Hz display/sim rate */
 
@@ -225,17 +228,18 @@ static void wave_step(float gx, float gy)
 
 static void render(void)
 {
-	uint16_t fb[H] = {0};
+	/* full 9-row controller buffer; physical rows 7-8 left off */
+	uint16_t fb9[9] = {0};
 
 	for (int y = 0; y < H; y++) {
 		for (int x = 0; x < W; x++) {
 			if (h[y][x] > SURF_THRESH) {
-				fb[y] |= (uint16_t)(1 << x);
+				fb9[y] |= (uint16_t)(1 << x);
 			}
 		}
 	}
 
-	display_framebuffer(leds, fb);
+	display_framebuffer(leds, fb9);
 }
 
 static int tick(void)

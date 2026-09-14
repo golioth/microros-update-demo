@@ -1,16 +1,18 @@
 # Tikk micro-ROS Liquid Tilt Display
 
 Zephyr app for the [Tikk](https://github.com/golioth/tikk-fleet) board
-(promicro_nrf52840 + add-on): a pool of "liquid" lives on the 9x16 LED matrix —
-calm and covering the display at rest, draining toward the low side with a
-concave corner waterline as you tilt, sloshing briefly on fast moves. Tilt data
+(promicro_nrf52840 + add-on): a pool of "liquid" lives on the 7x15 LED display
+(IS31FL3731 controller, 7x15 of its 9x16 matrix populated) — calm and covering
+the display at rest, draining toward the low side with a concave corner
+waterline as you tilt, sloshing briefly on fast moves. Tilt data
 is published over USB-CDC micro-ROS to a host agent.
 
 ## Progress (updated 2026-09-11)
 
 **Working, verified on hardware:**
 - [x] West workspace (NCS v3.0.1 / zephyr v4.0.99-ncs1-1, SDK 0.17.0) mirroring tikk-fleet
-- [x] LIS2DH accelerometer + IS31FL3731 9x16 LED matrix on the Tikk add-on board
+- [x] LIS2DH accelerometer + 7x15 LED display (IS31FL3731 controller; 7x15
+      of the 9x16 matrix is populated) on the Tikk add-on board
 - [x] Liquid display model, converged after six iterations:
       flat water film everywhere at rest + gravity tilt plane + wall-cling
       meniscus (concave corner waterline), calm settle, one honest slosh on

@@ -46,5 +46,13 @@ manifest:
       path: deps/modules/lib/pouch
       submodules: true
 
+    # NXP HAL — required to build the pouch gateway sample for
+    # frdm_rw612 (the NCS west-ncs.yml import filters hal_nxp out, so it
+    # must be explicit). Revision pinned to what our zephyr 4.0.99 expects.
+    - name: hal_nxp
+      revision: 0ac830233092247c26f5dd01a07b0a484532ea4c
+      url: https://github.com/zephyrproject-rtos/hal_nxp
+      path: deps/modules/hal/nxp
+
   self:
     path: app

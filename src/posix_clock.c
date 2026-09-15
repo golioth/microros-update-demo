@@ -27,9 +27,33 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/clock.h>
 
+/*
+ * Map picolibc's CLOCK_* values to Zephyr's SYS_CLOCK_* ids directly.
+ * Do NOT use sys_clock_from_clockid(): its CLOCK_MONOTONIC case only
+ * compiles when _POSIX_MONOTONIC_CLOCK is defined at KERNEL build time
+ * (lib/os/clock.c), which is not the case with the POSIX System
+ * Interfaces off — with the gated helper, rcutils_steady_time_now
+ * (CLOCK_MONOTONIC, used by rclc's RCL_STEADY_TIME support clock) got
+ * -EINVAL back and rcl_timer_init failed with RCL_RET_ERROR.
+ * SYS_CLOCK_REALTIME / SYS_CLOCK_MONOTONIC are always available from
+ * <zephyr/sys/clock.h>; the picolibc CLOCK_* macros are visible in this
+ * TU thanks to the app-scoped feature macros (see CMakeLists.txt).
+ */
+static int zephyr_clockid(clockid_t clock_id)
+{
+	switch ((int)clock_id) {
+	case CLOCK_REALTIME:
+		return SYS_CLOCK_REALTIME;
+	case CLOCK_MONOTONIC:
+		return SYS_CLOCK_MONOTONIC;
+	default:
+		return -EINVAL;
+	}
+}
+
 int clock_gettime(clockid_t clock_id, struct timespec *ts)
 {
-	int ret = sys_clock_gettime(sys_clock_from_clockid((int)clock_id), ts);
+	int ret = sys_clock_gettime(zephyr_clockid(clock_id), ts);
 
 	if (ret < 0) {
 		errno = -ret;
@@ -62,7 +86,7 @@ int clock_getres(clockid_t clock_id, struct timespec *res)
 
 int clock_settime(clockid_t clock_id, const struct timespec *tp)
 {
-	int ret = sys_clock_settime(sys_clock_from_clockid((int)clock_id), tp);
+	int ret = sys_clock_settime(zephyr_clockid(clock_id), tp);
 
 	if (ret < 0) {
 		errno = -ret;

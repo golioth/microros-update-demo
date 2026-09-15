@@ -101,12 +101,26 @@ prj.conf is the template for the pouch/BT block.
 
 Builds and runs on zephyr v4.4.0 + SDK 1.0.1 (gcc 14.3) from
 `~/gateway-ws`. Verified live: USB-CDC console + shell, LIS2DH, TMP102,
-littlefs at 0xf8000 (provisioned creds survive), pouch v0.2.0 + BLE
-initialized, and the full micro-ROS client (transport → session → node
-→ /tilt + /temp publishers → timer → 10 Hz publish) against the compose
-agent. REMAINING: press P0.11 → RW612 gateway session → device-cert
-upload (the original 4.00 scenario) → cloud check-in; then the OTA
-"before/after" pair rebuild on 4.4.
+littlefs at 0xf8000, pouch v0.2.0 + BLE, and the full micro-ROS client
+(transport → session → node → /tilt + /temp publishers → timer → 10 Hz
+publish) against the compose agent.
+
+**CHAIN COMPLETED 2026-09-15 evening** (triggered remotely via the new
+`sync` shell command — pouch_setup.c): the RW612 gateway connected,
+paired at security level 2, uploaded the device certificate (354 B) and
+forwarded it — "Pouch sync complete" repeatedly, no 4.00 anywhere. The
+session that died on every NCS 4.0.99 attempt now completes on 4.4;
+the 4.00 root-cause theory (BLE SAR leg corrupting the cert on the
+4.0.99 build) is confirmed by the fix working.
+
+NOTE: the NCS-era littlefs creds did NOT survive as assumed — the
+credentials dir existed but was EMPTY (the cause of "No device
+certificate" on every early 4.4 boot; note the old snap-era cert was
+361 B vs the fresh tikk-robot.crt.der 354 B from ~/Downloads). Re-
+provision with: smpmgr (uv pip install smpmgr into the venv; group is
+`file`, not `fs`) `--port <tikk console CDC> file upload
+~/Downloads/tikk-robot.{crt,key}.der /lfs1/credentials/{crt,key}.der`.
+REMAINING: OTA "before/after" pair rebuild on 4.4; branch push.
 
 Traps found porting (each cost a build cycle — read before touching):
 

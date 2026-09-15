@@ -97,6 +97,63 @@ v0.2.0 + sdk-ng 1.0.1). Pure-Zephyr builds use vanilla mbedtls
 NRF_SECURITY) are Nordic-only and must be dropped. The DK reference
 prj.conf is the template for the pouch/BT block.
 
+### 3d. Zephyr 4.4 port — LANDED 2026-09-15 (branch `zephyr-4.4-port`)
+
+Builds and runs on zephyr v4.4.0 + SDK 1.0.1 (gcc 14.3) from
+`~/gateway-ws`. Verified live: USB-CDC console + shell, LIS2DH, TMP102,
+littlefs at 0xf8000 (provisioned creds survive), pouch v0.2.0 + BLE
+initialized, and the full micro-ROS client (transport → session → node
+→ /tilt + /temp publishers → timer → 10 Hz publish) against the compose
+agent. REMAINING: press P0.11 → RW612 gateway session → device-cert
+upload (the original 4.00 scenario) → cloud check-in; then the OTA
+"before/after" pair rebuild on 4.4.
+
+Traps found porting (each cost a build cycle — read before touching):
+
+- **promicro_nrf52840 IS in-tree** on 4.4 (`boards/others/`) — no
+  BOARD_ROOT. BT needs no board config either: the controller is
+  devicetree-driven (`zephyr,bt-hci` in nrf52840.dtsi).
+- **POSIX System Interfaces (`CONFIG_POSIX_SYSTEM_INTERFACES`) is a
+  trap**: it adds `-I include/zephyr/posix` to EVERY TU, shadowing the
+  libc's own POSIX headers (rcutils then hits implicit isatty/fork/
+  execvp — hard errors under gcc >= 14). Same family as the
+  CONFIG_POSIX_API `<arpa/inet.h>` problem in §4-era NCS. Keep it OFF;
+  the app provides clocks itself.
+- **`src/posix_clock.c` (new)** provides clock_gettime/clock_getres/
+  clock_settime/usleep/nanosleep, mirroring zephyr's
+  lib/posix/options/clock.c. Do NOT use `sys_clock_from_clockid()`
+  inside it: its CLOCK_MONOTONIC case only compiles when
+  `_POSIX_MONOTONIC_CLOCK` is defined at KERNEL build time — with it
+  compiled out, rcutils' RCL_STEADY_TIME clock gets -EINVAL and
+  `rcl_timer_init` dies with RCL_RET_ERROR ("micro-ROS error 2").
+- App-scoped `_POSIX_C_SOURCE/_POSIX_MONOTONIC_CLOCK` feature macros
+  (CMakeLists `target_compile_definitions`) — Zephyr's `-std=c17`
+  strict mode hides picolibc's POSIX surface from app TUs otherwise.
+- **mbedtls 4.x** (tf-psa-crypto) dropped `mbedtls_pk_parse_key`'s RNG
+  params — guarded in credentials.c on `TF_PSA_CRYPTO_VERSION_MAJOR`.
+- **USB**: 4.4 also ships the `device_next` stack; the overlay's CDC
+  node defaults it on and BOTH stacks instantiate the same DT node
+  (multiply-defined at link). `CONFIG_USB_DEVICE_STACK_NEXT=n` (the
+  micro-ROS transport selects the legacy stack via usb_enable()).
+- **IS31FL3731 driver is a west module**, not in-tree (upstream removed
+  it): `golioth/led-driver-is31fl3731` v1.0.0 (SSH URL — private repo)
+  + `pixel_font` (font5x8.h), both now in the ~/gateway-ws manifest.
+- **Console CDC is up only after usb_enable()** (the micro-ROS
+  transport calls it) — all boot logs before that point are uncapturable
+  by design; expect the first readable output ~5-8 s into boot.
+- micro-ROS module patches: **0001-0004 + 0006-0009** apply to the
+  gateway-ws module tree after `west update` (0005 is NCS/SDC-only).
+  0006 gcc-14 strcasecmp, 0007 zephyr/posix/time.h rename shim +
+  zephyr_compat/, 0008 `_POSIX_MONOTONIC_CLOCK` (picolibc guards
+  CLOCK_* behind it), 0009 usleep decl (removed in POSIX Issue 7).
+- **Agent/renumber dance**: every Tikk reset re-enumerates the CDC and
+  (with held fds) reshuffles ttyACM minors; the compose agent binds by
+  major:minor, so it must be `--force-recreate`d after every reset.
+  The device client parks in "Waiting for agent connection" and wakes
+  on the agent's DTR — no Tikk reset needed after the agent comes up
+  (and never probe the micro-ROS CDC yourself: DDR/DTR toggles burn
+  the handshake).
+
 ## 4. smpmgr timeouts / `mcumgr: command not found` on the device shell
 
 **Cause:** `MCUMGR_TRANSPORT_SHELL` depends on `SHELL && BASE64 && CRC`.

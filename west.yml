@@ -33,17 +33,18 @@ manifest:
       url: https://github.com/micro-ROS/micro_ros_zephyr_module
       path: deps/modules/lib/micro_ros_zephyr_module
 
-    # Golioth pouch (same revision as tikk-fleet, known-good on this machine).
-    # west-ncs.yml import pins the NCS tree (nrf v3.0.1) — must stay in sync
-    # with the explicit nrf project above.
+    # Golioth pouch — v0.2.0 release (the revision the current Connect
+    # Agent pairs with; the old pre-v0.1.0 pin advertised a 128-bit
+    # service UUID the v0.2-era gateway does not scan for).
+    # NOTE: v0.2.0's own west-ncs.yml pins nrf v3.4-branch, which would
+    # conflict with our explicit nrf v3.0.1 above — so NO import here;
+    # our nrf project provides the NCS tree. (v0.2.0's "supported" Zephyr
+    # is v4.4; we run 4.0.99-ncs1-1 — build-verified empirically.)
     - name: pouch
-      revision: 2d66b836471c03ed9bbee11e5fb033faf94e7a29
+      revision: v0.2.0
       url: https://github.com/golioth/pouch
-      path: modules/lib/pouch
+      path: deps/modules/lib/pouch
       submodules: true
-      import:
-        file: west-ncs.yml
-        path-prefix: deps
 
   self:
     path: app

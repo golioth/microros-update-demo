@@ -5,7 +5,8 @@
  *
  * Pouch (over BLE GATT) + Golioth bring-up for the Tikk micro-ROS demo.
  * Runs in its own thread so the liquid display + micro-ROS publisher are
- * unaffected. Pattern from tikk-fleet/app/tikk-pouch-demo/src/main.c.
+ * unaffected. Ported to pouch v0.2.0 (transport/bluetooth/gatt.h API,
+ * 16-bit service UUID 0xFC49, app-managed pairing callbacks).
  */
 
 #include <zephyr/kernel.h>
@@ -18,8 +19,7 @@ LOG_MODULE_REGISTER(pouch_setup, LOG_LEVEL_INF);
 
 #include <pouch/pouch.h>
 #include <pouch/events.h>
-#include <pouch/transport/ble_gatt/peripheral.h>
-#include <pouch/transport/ble_gatt/common/types.h>
+#include <pouch/transport/bluetooth/gatt.h>
 
 #include "credentials.h"
 
@@ -28,27 +28,14 @@ LOG_MODULE_REGISTER(pouch_setup, LOG_LEVEL_INF);
 #define POUCH_THREAD_STACK 4096
 #define POUCH_THREAD_PRIO 5
 
-static struct
-{
-    uint8_t uuid[16];
-    struct golioth_ble_gatt_adv_data data;
-} __packed service_data = {
-    .uuid = {GOLIOTH_BLE_GATT_UUID_SVC_VAL},
-    .data =
-        {
-            .version = (POUCH_VERSION << GOLIOTH_BLE_GATT_ADV_VERSION_POUCH_SHIFT)
-                | (GOLIOTH_BLE_GATT_VERSION << GOLIOTH_BLE_GATT_ADV_VERSION_SELF_SHIFT),
-            .flags = 0x0,
-        },
-};
+/* Pouch v0.2.0: adv payload comes from the library (16-bit UUID 0xFC49
+ * + version byte + flags) and lives in the MAIN advertisement. */
+static struct pouch_gatt_adv service_data = POUCH_GATT_ADV_DATA_INIT;
 
 static struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+    BT_DATA(BT_DATA_SVC_DATA16, &service_data, sizeof(service_data)),
     BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
-};
-
-static struct bt_data sd[] = {
-    BT_DATA(BT_DATA_SVC_DATA128, &service_data, sizeof(service_data)),
 };
 
 static void connected(struct bt_conn *conn, uint8_t err)
@@ -65,7 +52,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 static void disconnect_work_handler(struct k_work *work)
 {
-    int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+    int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), NULL, 0);
     if (err)
     {
         LOG_ERR("Advertising failed to start (err %d)", err);
@@ -86,6 +73,38 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
     .disconnected = disconnected,
 };
 
+/* Pairing: the gateway runs passkey_mode=auto; mirror that on the device
+ * side for the demo (display the passkey in the log, auto-confirm). */
+static void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
+{
+    char addr[BT_ADDR_LE_STR_LEN];
+    char passkey_str[7];
+
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+    snprintf(passkey_str, sizeof(passkey_str), "%06u", passkey);
+    LOG_INF("Passkey for %s: %s (auto-confirming)", addr, passkey_str);
+}
+
+static void auth_passkey_confirm(struct bt_conn *conn, unsigned int passkey)
+{
+    LOG_INF("Confirming passkey");
+    bt_conn_auth_passkey_confirm(conn);
+}
+
+static void auth_cancel(struct bt_conn *conn)
+{
+    char addr[BT_ADDR_LE_STR_LEN];
+
+    bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+    LOG_INF("Pairing cancelled: %s", addr);
+}
+
+static struct bt_conn_auth_cb auth_cb = {
+    .passkey_display = auth_passkey_display,
+    .passkey_confirm = auth_passkey_confirm,
+    .cancel = auth_cancel,
+};
+
 /* Sync-request button (P0.11 on the Tikk add-on): pressing it sets the
  * sync-request flag in the BLE advertisement — a scanning gateway sees
  * the flag, connects, and a pouch session syncs to the cloud. The flag
@@ -96,10 +115,8 @@ static struct gpio_callback sync_button_cb;
 
 static void request_sync_work_handler(struct k_work *work)
 {
-    int err;
-
-    service_data.data.flags |= GOLIOTH_BLE_GATT_ADV_FLAG_SYNC_REQUEST;
-    err = bt_le_adv_update_data(ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+    pouch_gatt_adv_req_sync(&service_data, true);
+    int err = bt_le_adv_update_data(ad, ARRAY_SIZE(ad), NULL, 0);
     if (err)
     {
         LOG_ERR("Failed to update advertising data (err %d)", err);
@@ -149,8 +166,8 @@ static void pouch_event_handler(enum pouch_event event, void *ctx)
     case POUCH_EVENT_SESSION_END:
         /* Session complete — clear the sync-request flag until the next
          * button press. */
-        service_data.data.flags = 0;
-        bt_le_adv_update_data(ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+        pouch_gatt_adv_req_sync(&service_data, false);
+        bt_le_adv_update_data(ad, ARRAY_SIZE(ad), NULL, 0);
         LOG_INF("Pouch: session ended");
         break;
     default:
@@ -167,20 +184,20 @@ static void pouch_thread(void)
     k_sleep(K_SECONDS(8));
 
     LOG_INF("Pouch SDK version: " STRINGIFY(APP_BUILD_VERSION));
-    LOG_INF("Pouch protocol version: %d, BLE transport version: %d",
-            POUCH_VERSION, GOLIOTH_BLE_GATT_VERSION);
+    LOG_INF("Pouch protocol version: %d, GATT transport version: %d",
+            POUCH_VERSION, POUCH_GATT_VERSION);
 
-    int err = golioth_ble_gatt_peripheral_init();
-    if (err)
-    {
-        LOG_ERR("Failed to initialize Pouch BLE GATT peripheral (err %d)", err);
-        return;
-    }
-
-    err = bt_enable(NULL);
+    int err = bt_enable(NULL);
     if (err)
     {
         LOG_ERR("Bluetooth init failed (err %d)", err);
+        return;
+    }
+
+    err = bt_conn_auth_cb_register(&auth_cb);
+    if (err)
+    {
+        LOG_ERR("Bluetooth auth cb register failed (err %d)", err);
         return;
     }
     LOG_INF("Bluetooth initialized");
@@ -215,7 +232,7 @@ static void pouch_thread(void)
 
     LOG_INF("Pouch initialized");
 
-    err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+    err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), NULL, 0);
     if (err)
     {
         LOG_ERR("Advertising failed to start (err %d)", err);

@@ -14,6 +14,7 @@ LOG_MODULE_REGISTER(pouch_setup, LOG_LEVEL_INF);
 
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
+#include <zephyr/drivers/gpio.h>
 
 #include <pouch/pouch.h>
 #include <pouch/events.h>
@@ -85,6 +86,59 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
     .disconnected = disconnected,
 };
 
+/* Sync-request button (P0.11 on the Tikk add-on): pressing it sets the
+ * sync-request flag in the BLE advertisement — a scanning gateway sees
+ * the flag, connects, and a pouch session syncs to the cloud. The flag
+ * clears itself when the session ends. Demo trigger: deliberate, visible,
+ * testable. (A periodic timer can re-arm this later.) */
+static const struct gpio_dt_spec sync_button = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
+static struct gpio_callback sync_button_cb;
+
+static void request_sync_work_handler(struct k_work *work)
+{
+    int err;
+
+    service_data.data.flags |= GOLIOTH_BLE_GATT_ADV_FLAG_SYNC_REQUEST;
+    err = bt_le_adv_update_data(ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+    if (err)
+    {
+        LOG_ERR("Failed to update advertising data (err %d)", err);
+        return;
+    }
+    LOG_INF("Sync requested — flag set, waiting for a gateway to connect");
+}
+K_WORK_DEFINE(request_sync_work, request_sync_work_handler);
+
+static void sync_button_isr(const struct device *dev,
+                             struct gpio_callback *cb, uint32_t pins)
+{
+    k_work_submit(&request_sync_work);
+}
+
+static int init_sync_button(void)
+{
+    if (!gpio_is_ready_dt(&sync_button))
+    {
+        LOG_WRN("Sync button not ready (P0.11)");
+        return -ENODEV;
+    }
+
+    int err = gpio_pin_configure_dt(&sync_button, GPIO_INPUT);
+    if (err)
+    {
+        return err;
+    }
+
+    gpio_init_callback(&sync_button_cb, sync_button_isr, BIT(sync_button.pin));
+    err = gpio_add_callback_dt(&sync_button, &sync_button_cb);
+    if (err)
+    {
+        return err;
+    }
+
+    return gpio_pin_interrupt_configure_dt(&sync_button, GPIO_INT_EDGE_TO_ACTIVE);
+}
+
 static void pouch_event_handler(enum pouch_event event, void *ctx)
 {
     switch (event)
@@ -93,6 +147,10 @@ static void pouch_event_handler(enum pouch_event event, void *ctx)
         LOG_INF("Pouch: session started (gateway connected)");
         break;
     case POUCH_EVENT_SESSION_END:
+        /* Session complete — clear the sync-request flag until the next
+         * button press. */
+        service_data.data.flags = 0;
+        bt_le_adv_update_data(ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
         LOG_INF("Pouch: session ended");
         break;
     default:
@@ -165,6 +223,9 @@ static void pouch_thread(void)
     }
 
     LOG_INF("Advertising as \"%s\" — waiting for a gateway", CONFIG_BT_DEVICE_NAME);
+
+    init_sync_button();
+    LOG_INF("Sync button ready (P0.11) — press to request a sync");
 }
 
 K_THREAD_DEFINE(pouch_tid, POUCH_THREAD_STACK,

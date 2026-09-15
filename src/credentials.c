@@ -19,17 +19,28 @@ LOG_MODULE_REGISTER(credentials);
 #define CERT_FILE CERT_DIR "/crt.der"
 #define KEY_FILE CERT_DIR "/key.der"
 
+/* mbedtls 4.x (pure-Zephyr 4.4 workspace) is backed by tf-psa-crypto,
+ * which dropped the f_rng/p_rng parameters from mbedtls_pk_parse_key()
+ * — PSA crypto handles the RNG internally. NCS v3.0.1 (mbedtls 3.x)
+ * still needs them. The tf-psa-crypto build_info (pulled in by pk.h)
+ * defines TF_PSA_CRYPTO_VERSION_MAJOR; mbedtls 3.x headers never do. */
+#if !defined(TF_PSA_CRYPTO_VERSION_MAJOR)
 static int psa_rng_for_mbedtls(void *p_rng, unsigned char *output, size_t output_len)
 {
     return psa_generate_random(output, output_len);
 }
+#endif
 
 /** Load the raw private key data into PSA */
 static psa_key_id_t import_raw_pk(const uint8_t *private_key, size_t size)
 {
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
+#if !defined(TF_PSA_CRYPTO_VERSION_MAJOR)
     int err = mbedtls_pk_parse_key(&pk, private_key, size, NULL, 0, psa_rng_for_mbedtls, NULL);
+#else
+    int err = mbedtls_pk_parse_key(&pk, private_key, size, NULL, 0);
+#endif
     if (err)
     {
         LOG_ERR("Failed to parse key: -0x%x", -err);

@@ -24,10 +24,23 @@ list(APPEND ZEPHYR_EXTRA_MODULES
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(tikk_liquid_microros)
 
+# Zephyr compiles C sources with -std=c17 (strict), under which picolibc
+# hides its POSIX surface (clockid_t, the clock_gettime() prototype,
+# CLOCK_MONOTONIC) behind feature-test macros. The app's clock shim
+# (src/posix_clock.c) and the micro-ROS publisher timestamps (src/main.c)
+# need them. Scoped to OUR sources only — this must not leak into other
+# modules (mbedtls et al.), which is why the Zephyr-wide POSIX System
+# Interfaces routing stays off (see prj.conf).
+target_compile_definitions(app PRIVATE
+  _POSIX_C_SOURCE=200809L
+  _POSIX_MONOTONIC_CLOCK=200809L
+)
+
 target_sources(app PRIVATE
   src/main.c
   src/nrf52840_power.c
   src/pouch_setup.c
   src/credentials.c
   src/fw_update.c
+  src/posix_clock.c
 )

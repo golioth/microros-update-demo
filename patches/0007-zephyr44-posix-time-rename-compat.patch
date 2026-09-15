@@ -1,0 +1,71 @@
+From: Zephyr 4.4 / SDK 1.0.1 port
+Subject: [PATCH] libmicroros: compat shim for the 4.4 zephyr/posix/time.h rename
+
+Zephyr 4.4 renamed <zephyr/posix/time.h> to <zephyr/posix/posix_time.h>
+(gated on _POSIX_C_SOURCE) and dropped the legacy include/posix/
+directory. micro-ROS sources compiled with __ZEPHYR__ — rcutils
+src/time_unix.c chief among them — still include the pre-4.4 path
+unconditionally for Zephyr >= 3.1, so the colcon cross-build fails with
+"zephyr/posix/time.h: No such file or directory".
+
+Add a zephyr_compat/ include tree to the module and put it FIRST on the
+colcon C/CXX flag include path: it restores the old header name on 4.4+
+as a plain picolibc <time.h> passthrough (which supplies the timespec/
+clockid_t/CLOCK_*/clock_gettime declarations rcutils needs). Do not
+include <zephyr/posix/posix_time.h> from the shim: its typedefs and
+prototypes collide with picolibc's POSIX surface (locale_t, struct
+itimerspec, timer_*). On pre-4.4 trees the real header this shim
+shadows was itself a "read standard header" <time.h> passthrough, so
+the substitution is equivalent there as well.
+
+The app side of this fix (version-guarded include in src/main.c and the
+clock_gettime() provider src/posix_clock.c — Zephyr 4.4's POSIX System
+Interfaces umbrella stays off because its app-wide -I include/zephyr/
+posix header routing shadows the libc's POSIX headers) lives in the
+tikk app repo.
+
+Signed-off-by: Hermes (for Chris Gammell)
+
+--- a/modules/libmicroros/libmicroros.mk
++++ b/modules/libmicroros/libmicroros.mk
+@@ -30,8 +30,8 @@
+ CFLAGS_INTERNAL := -D__STDC_WANT_LIB_EXT1__=1 $(CFLAGS_INTERNAL)
+ CXXFLAGS_INTERNAL := -Drestrict=__restrict__ $(CXXFLAGS_INTERNAL)
+ 
+-CFLAGS_INTERNAL := -c -I$(ZEPHYR_BASE)/include/posix -I$(PROJECT_BINARY_DIR)/include/generated $(CFLAGS_INTERNAL)
+-CXXFLAGS_INTERNAL := -c -I$(ZEPHYR_BASE)/include/posix -I$(PROJECT_BINARY_DIR)/include/generated $(CXXFLAGS_INTERNAL)
++CFLAGS_INTERNAL := -c -I$(COMPONENT_PATH)/zephyr_compat -I$(ZEPHYR_BASE)/include/posix -I$(PROJECT_BINARY_DIR)/include/generated $(CFLAGS_INTERNAL)
++CXXFLAGS_INTERNAL := -c -I$(COMPONENT_PATH)/zephyr_compat -I$(ZEPHYR_BASE)/include/posix -I$(PROJECT_BINARY_DIR)/include/generated $(CXXFLAGS_INTERNAL)
+ 
+ all: $(COMPONENT_PATH)/libmicroros.a
+ 
+--- a/modules/libmicroros/zephyr_compat/zephyr/posix/time.h
++++ b/modules/libmicroros/zephyr_compat/zephyr/posix/time.h
+@@ -0,0 +1,27 @@
++#ifndef MICROROS_ZEPHYR_COMPAT_ZEPHYR_POSIX_TIME_H
++#define MICROROS_ZEPHYR_COMPAT_ZEPHYR_POSIX_TIME_H
++
++/*
++ * Zephyr 4.4 renamed <zephyr/posix/time.h> to <zephyr/posix/posix_time.h>
++ * (and gates its content on _POSIX_C_SOURCE). micro-ROS sources built with
++ * __ZEPHYR__ (rcutils src/time_unix.c et al.) still include the pre-4.4
++ * path unconditionally for Zephyr >= 3.1. This shim, placed first on the
++ * colcon include path, restores the old header name.
++ *
++ * picolibc's <time.h> (reached through Zephyr's libc glue, which
++ * include_next's into the toolchain headers) provides struct timespec,
++ * clockid_t, CLOCK_MONOTONIC/CLOCK_REALTIME and the clock_gettime()
++ * declaration under its default visibility, which is all rcutils needs.
++ * Do NOT also include <zephyr/posix/posix_time.h> here: its typedefs and
++ * prototypes collide with picolibc's POSIX surface (locale_t,
++ * struct itimerspec, timer_*).
++ *
++ * On pre-4.4 trees (NCS) the real header this shim shadows was itself a
++ * "read standard header" <time.h> passthrough for picolibc, so the
++ * substitution is equivalent there as well. The clock_gettime()
++ * implementation is provided by the application (posix_clock.c in the
++ * tikk app).
++ */
++#include <time.h>
++
++#endif /* MICROROS_ZEPHYR_COMPAT_ZEPHYR_POSIX_TIME_H */

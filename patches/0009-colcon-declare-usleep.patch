@@ -1,0 +1,47 @@
+From: Zephyr 4.4 / SDK 1.0.1 port
+Subject: [PATCH] libmicroros: declare usleep() for rclc
+
+SDK 1.0.1's picolibc omits the usleep(2) prototype entirely (removed in
+POSIX Issue 7, so no feature macro exposes it), but rclc's
+src/rclc/sleep.c calls it — a hard implicit-declaration error under the
+SDK's gcc 14.3 (it was a warning on NCS's gcc 13).
+
+Add a force-included posix_decls.h to the zephyr_compat tree declaring
+usleep (useconds_t context from <unistd.h>). The implementation is
+provided by the application: posix_clock.c in the tikk app mirrors
+zephyr/lib/posix/options/clock.c.
+
+Signed-off-by: Hermes (for Chris Gammell)
+
+--- a/modules/libmicroros/libmicroros.mk
++++ b/modules/libmicroros/libmicroros.mk
+@@ -16,6 +16,7 @@
+ # picolibc declares both unconditionally in <strings.h>; force-include it so
+ # every C TU gets the prototypes instead of masking with -Wno-error.
+ CFLAGS_INTERNAL := -include strings.h $(CFLAGS_INTERNAL)
++CFLAGS_INTERNAL := -include $(COMPONENT_PATH)/zephyr_compat/posix_decls.h $(CFLAGS_INTERNAL)
+ 
+ # picolibc: rcutils enables Annex K mid-translation-unit (#define
+ # __STDC_WANT_LIB_EXT1__ 1 in error_handling.h), but picolibc only typedefs
+--- a/modules/libmicroros/zephyr_compat/posix_decls.h
++++ b/modules/libmicroros/zephyr_compat/posix_decls.h
+@@ -0,0 +1,19 @@
++#ifndef MICROROS_ZEPHYR_COMPAT_POSIX_DECLS_H
++#define MICROROS_ZEPHYR_COMPAT_POSIX_DECLS_H
++
++/*
++ * Declarations for POSIX interfaces that picolibc (SDK 1.0.1) does not
++ * declare under any feature macro, but that micro-ROS sources call.
++ * The implementations are provided by the application (posix_clock.c in
++ * the tikk app mirrors zephyr/lib/posix/options/clock.c).
++ *
++ * usleep(2) was removed in POSIX Issue 7, so picolibc omits the
++ * declaration entirely (rclc src/rclc/sleep.c calls it; declarations
++ * hidden by default visibility are NOT the problem here — there is
++ * no guard, the prototype simply does not exist).
++ */
++#include <unistd.h> /* useconds_t context */
++
++int usleep(useconds_t useconds);
++
++#endif /* MICROROS_ZEPHYR_COMPAT_POSIX_DECLS_H */

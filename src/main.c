@@ -18,9 +18,18 @@
 #include "tikk_led_matrix.h"
 
 #ifdef CONFIG_MICROROS
+#include <version.h>
+#if ZEPHYR_VERSION_CODE >= ZEPHYR_VERSION(4, 4, 0)
+/* Zephyr 4.4 renamed <zephyr/posix/time.h> -> <zephyr/posix/posix_time.h>.
+ * picolibc's <time.h> (SDK 1.0.1) exposes clock_gettime + CLOCK_REALTIME
+ * under its default visibility; the implementation lives in
+ * src/posix_clock.c (see prj.conf: no POSIX header routing on 4.4). */
+#include <time.h>
+#else
 #include <zephyr/posix/time.h> /* clock_gettime + CLOCK_REALTIME (picolibc's
 				* <time.h> hides POSIX names without
 				* _POSIX_C_SOURCE, which we no longer set) */
+#endif
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
 #include <rclc/rclc.h>

@@ -1,0 +1,43 @@
+From: Zephyr 4.4 / SDK 1.0.1 port
+Subject: [PATCH] libmicroros: define _POSIX_MONOTONIC_CLOCK for picolibc's
+ clock guards
+
+SDK 1.0.1's picolibc guards the POSIX.1b clock constants behind
+"#if defined(_POSIX_MONOTONIC_CLOCK)" in <time.h> — a plain option
+macro that neither the default visibility nor _POSIX_C_SOURCE defines
+(verified empirically: a bare probe fails on CLOCK_MONOTONIC, and so
+does one with -D_POSIX_C_SOURCE=200809L).
+
+rcutils src/time_unix.c needs CLOCK_MONOTONIC; previously it compiled
+only because the Zephyr POSIX System Interfaces umbrella exported this
+macro app-wide (-D_POSIX_MONOTONIC_CLOCK=200809L from
+lib/posix/options) — a config we deliberately dropped because its
+app-wide -I include/zephyr/posix header routing shadows the libc's
+POSIX headers. Define the macro here instead, with the same name and
+value Zephyr's own POSIX options use, scoped to the colcon C flags.
+
+4.4-workspace only: on the NCS tree the real (pre-4.4)
+zephyr/posix/time.h defines CLOCK_MONOTONIC itself, and applying this
+define there would collide.
+
+The clock_gettime()/nanosleep()/usleep() implementations the app
+links against live in the tikk app repo (src/posix_clock.c).
+
+Signed-off-by: Hermes (for Chris Gammell)
+
+--- a/modules/libmicroros/libmicroros.mk
++++ b/modules/libmicroros/libmicroros.mk
+@@ -30,6 +30,15 @@ CFLAGS_INTERNAL := -D__STDC_WANT_LIB_EXT1__=1 $(CFLAGS_INTERNAL)
+ CXXFLAGS_INTERNAL := -Drestrict=__restrict__ $(CXXFLAGS_INTERNAL)
+ 
++# picolibc hides the POSIX.1b clock constants (CLOCK_MONOTONIC etc.)
++# behind #if defined(_POSIX_MONOTONIC_CLOCK) — a plain option macro that
++# neither default visibility nor _POSIX_C_SOURCE defines. rcutils'
++# time_unix.c needs CLOCK_MONOTONIC; this mirrors the macro Zephyr's own
++# POSIX options export (same name and value). 4.4-workspace only: on the
++# NCS tree the real zephyr/posix/time.h defines CLOCK_MONOTONIC itself
++# and this define would collide.
++CFLAGS_INTERNAL := -D_POSIX_MONOTONIC_CLOCK=200809L $(CFLAGS_INTERNAL)
++
+ CFLAGS_INTERNAL := -c -I$(COMPONENT_PATH)/zephyr_compat -I$(ZEPHYR_BASE)/include/posix -I$(PROJECT_BINARY_DIR)/include/generated $(CFLAGS_INTERNAL)
+ CXXFLAGS_INTERNAL := -c -I$(COMPONENT_PATH)/zephyr_compat -I$(ZEPHYR_BASE)/include/posix -I$(PROJECT_BINARY_DIR)/include/generated $(CXXFLAGS_INTERNAL)

@@ -1,0 +1,36 @@
+From: Zephyr 4.4 / SDK 1.0.1 port
+Subject: [PATCH] libmicroros: force-include strings.h for gcc >= 14
+
+gcc >= 14 (Zephyr SDK 1.0.1 ships 14.3.0) makes
+-Wimplicit-function-declaration a hard error in C. rcutils'
+src/strcasecmp.c calls strcasecmp/strncasecmp without including
+<strings.h> (neither does its own rcutils/strcasecmp.h declare them) —
+it only ever worked by implicit declaration, which gcc <= 13 (SDK
+0.17.x) downgraded to a warning.
+
+picolibc declares both functions unconditionally in <strings.h>
+(no feature-test guard), so force-include the header into every colcon
+C TU to give the whole micro-ROS stack the correct prototypes.
+Masking with -Wno-error=implicit-function-declaration would leave the
+same latent implicit-decl UB in place; C++ flags are untouched (C++ has
+never allowed implicit declarations, so no C++ TU relies on them).
+
+Signed-off-by: Hermes (for Chris Gammell)
+
+diff --git a/modules/libmicroros/libmicroros.mk b/modules/libmicroros/libmicroros.mk
+--- a/modules/libmicroros/libmicroros.mk
++++ b/modules/libmicroros/libmicroros.mk
+@@ -10,6 +10,13 @@
+ CFLAGS_INTERNAL := $(X_CFLAGS)
+ CXXFLAGS_INTERNAL := $(X_CXXFLAGS)
+ 
++# gcc >= 14 (SDK 1.0.1) makes implicit-function-declaration a hard error.
++# rcutils/src/strcasecmp.c calls strcasecmp/strncasecmp without including
++# <strings.h> (implicit decls were only a warning on gcc <= 13 / SDK 0.17.x).
++# picolibc declares both unconditionally in <strings.h>; force-include it so
++# every C TU gets the prototypes instead of masking with -Wno-error.
++CFLAGS_INTERNAL := -include strings.h $(CFLAGS_INTERNAL)
++
+ # picolibc: rcutils enables Annex K mid-translation-unit (#define
+ # __STDC_WANT_LIB_EXT1__ 1 in error_handling.h), but picolibc only typedefs
+ # __errno_t/__rsize_t in sys/_types.h when the macro is already set at FIRST

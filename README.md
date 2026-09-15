@@ -177,3 +177,11 @@ thing to flash.)
 - Per-LED PWM (grayscale waves): driver's write_channels is on/off only; would
   need PWM page burst support in the is31fl3731 driver
 - Pouch/BLE transport: later
+
+## Troubleshooting
+
+Gateway/BLE/cloud failure modes and their fixes — including the
+Connect Agent rev 28 device-cert bug analysis with captured evidence —
+live in [troubleshooting/connect-agent.md](troubleshooting/connect-agent.md).
+The capture proxy used to gather the evidence is
+[tools/gw-capture-proxy.py](tools/gw-capture-proxy.py).

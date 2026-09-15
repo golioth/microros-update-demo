@@ -1,0 +1,54 @@
+[12:57:38] #1 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:57:38] #1 upstream -> 200 (1482 B resp)
+[12:57:46] #2 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:57:46] #2 upstream -> 200 (1482 B resp)
+[12:58:45] #3 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:58:45] #3 upstream -> 200 (1482 B resp)
+[12:58:45] #4 POST /.g/device-cert len=361 sha16=50921a17ca19395e ct=application/octet-stream
+         first-bytes: 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d 2d
+[12:58:45] #4 upstream -> 400 (11 B resp)
+[12:58:55] #5 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:58:55] #5 upstream -> 200 (1482 B resp)
+[12:58:55] #6 POST /.g/device-cert len=361 sha16=67434abba0018ffc ct=application/octet-stream
+         first-bytes: 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00
+[12:58:55] #6 upstream -> 400 (11 B resp)
+[12:59:05] #7 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:59:05] #7 upstream -> 200 (1482 B resp)
+[12:59:05] #8 POST /.g/device-cert len=361 sha16=67434abba0018ffc ct=application/octet-stream
+         first-bytes: 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00
+[12:59:05] #8 upstream -> 400 (11 B resp)
+[12:59:15] #9 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:59:15] #9 upstream -> 200 (1482 B resp)
+[12:59:16] #10 POST /.g/device-cert len=361 sha16=67434abba0018ffc ct=application/octet-stream
+         first-bytes: 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00
+[12:59:16] #10 upstream -> 400 (11 B resp)
+[12:59:25] #11 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:59:25] #11 upstream -> 200 (1482 B resp)
+[12:59:25] #12 POST /.g/device-cert len=361 sha16=67434abba0018ffc ct=application/octet-stream
+         first-bytes: 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00
+[12:59:25] #12 upstream -> 400 (11 B resp)
+[12:59:35] #13 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:59:35] #13 upstream -> 200 (1482 B resp)
+[12:59:36] #14 POST /.g/device-cert len=361 sha16=67434abba0018ffc ct=application/octet-stream
+         first-bytes: 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00
+[12:59:36] #14 upstream -> 400 (11 B resp)
+[12:59:45] #15 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:59:45] #15 upstream -> 200 (1482 B resp)
+[12:59:45] #16 POST /.g/device-cert len=361 sha16=67434abba0018ffc ct=application/octet-stream
+         first-bytes: 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00
+[12:59:45] #16 upstream -> 400 (11 B resp)
+[12:59:55] #17 GET /.g/server-cert len=0 sha16=- ct=None
+         first-bytes: 
+[12:59:55] #17 upstream -> 200 (1482 B resp)
+[12:59:56] #18 POST /.g/device-cert len=361 sha16=67434abba0018ffc ct=application/octet-stream
+         first-bytes: 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00 04 00
+[12:59:56] #18 upstream -> 400 (11 B resp)

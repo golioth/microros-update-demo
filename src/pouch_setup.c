@@ -16,6 +16,9 @@ LOG_MODULE_REGISTER(pouch_setup, LOG_LEVEL_INF);
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/shell/shell.h>
+
+#include <string.h>
 
 #include <pouch/pouch.h>
 #include <pouch/events.h>
@@ -155,6 +158,35 @@ static int init_sync_button(void)
 
     return gpio_pin_interrupt_configure_dt(&sync_button, GPIO_INT_EDGE_TO_ACTIVE);
 }
+
+/* Shell command to simulate the sync button from the console — handy
+ * when the board is out of arm's reach or attached to a jig. Submits the
+ * SAME work item the GPIO ISR submits, so the flag set + advertising
+ * update run in the system workqueue exactly like a physical press.
+ * "sync clear" cancels a pending request (the flag otherwise clears
+ * itself on POUCH_EVENT_SESSION_END). */
+static int cmd_sync(const struct shell *sh, size_t argc, char *argv[])
+{
+    if (argc > 1 && strcmp(argv[1], "clear") == 0)
+    {
+        pouch_gatt_adv_req_sync(&service_data, false);
+        int err = bt_le_adv_update_data(ad, ARRAY_SIZE(ad), NULL, 0);
+        if (err)
+        {
+            shell_error(sh, "failed to update advertising data (err %d)", err);
+            return -EIO;
+        }
+        shell_print(sh, "sync request cleared");
+        return 0;
+    }
+
+    k_work_submit(&request_sync_work);
+    shell_print(sh, "sync requested (simulated button press)");
+    return 0;
+}
+SHELL_CMD_REGISTER(sync, NULL,
+                   "Simulate the P0.11 sync button press (\"sync clear\" cancels)",
+                   cmd_sync);
 
 static void pouch_event_handler(enum pouch_event event, void *ctx)
 {

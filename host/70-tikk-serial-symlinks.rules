@@ -1,0 +1,13 @@
+# Stable symlinks for the Tikk's two USB CDC interfaces (VID 2fe3:0100).
+# The kernel ttyACM minor numbers shift every time a stale fd holds an
+# instance across a reboot/replug (bit us five times in one session) —
+# the USB INTERFACE numbers never change:
+#   interface 00-01 = shell/console CDC
+#   interface 02-03 = micro-ROS XRCE CDC
+# Install:
+#   sudo cp 70-tikk-serial-symlinks.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+# Then use /dev/tikk-console and /dev/tikk-microros everywhere.
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2fe3", ATTRS{idProduct}=="0100", ENV{ID_USB_INTERFACE_NUM}=="00", SYMLINK+="tikk-console"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2fe3", ATTRS{idProduct}=="0100", ENV{ID_USB_INTERFACE_NUM}=="02", SYMLINK+="tikk-microros"

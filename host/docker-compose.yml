@@ -9,7 +9,9 @@ services:
       # container /dev/shm boundaries — force UDP
       FASTDDS_BUILTIN_TRANSPORTS: UDPv4
     devices:
-      - /dev/ttyACM1:/dev/ttyACM1
-    command: serial --dev /dev/ttyACM1 -b 115200 -v6
-    # ttyACM1 = micro-ROS CDC ("CDC_ACM_0"); ttyACM0 is the console port.
-    # Adjust if the enumeration order changes.
+      - /dev/tikk-microros:/dev/tikk-microros
+    command: serial --dev /dev/tikk-microros -b 115200 -v6
+    # /dev/tikk-microros = udev symlink to the micro-ROS CDC (USB
+    # interface 02), from host/70-tikk-serial-symlinks.rules — immune to
+    # the ttyACM minor-number shifts on replug/reboot. Console shell
+    # lives on /dev/tikk-console (USB interface 00).

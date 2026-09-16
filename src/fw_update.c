@@ -96,6 +96,11 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
             LOG_ERR("Failed to init flash write");
             return;
         }
+        /* A retry restarts the image from offset 0 — restart the
+         * display too, or it freezes at the stale % until the new pass
+         * overtakes the old high-water mark (mid-download BLE drops
+         * followed by auto-resync hit exactly this path). */
+        ota_last_pct = 255;
     }
 
     check_progress((uint32_t)offset);
@@ -109,13 +114,13 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
 
     if (is_last)
     {
-        fw_downloading = false;
-        fw_download_pending = false;
         LOG_INF("Image written; rebooting to apply upgrade");
 
         err = boot_request_upgrade(BOOT_SWAP_TYPE_TEST);
         if (err)
         {
+            fw_downloading = false;
+            fw_download_pending = false;
             LOG_ERR("Failed to request upgrade");
             return;
         }
@@ -125,8 +130,13 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
         {
         }
 #endif
-        /* Checkmark flourish on the matrix (1 s, self-clears) */
+        /* Checkmark flourish on the matrix (1 s, self-clears). Hold
+         * fw_downloading through it so the liquid sim does not reclaim
+         * the matrix within one 50 ms tick and erase the checkmark
+         * before anyone sees it. */
         display_sent_pattern(leds, OTA_TEXT_BRIGHTNESS);
+        fw_downloading = false;
+        fw_download_pending = false;
         k_sleep(K_SECONDS(1));
         sys_reboot(SYS_REBOOT_WARM);
     }

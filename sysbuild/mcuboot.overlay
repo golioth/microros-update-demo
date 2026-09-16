@@ -8,6 +8,16 @@
 #include "flash-layout.dtsi"
 
 / {
+	chosen {
+		/* The bootloader runs from boot_partition: the board dts
+		 * points zephyr,code-partition at slot0 (right for the app
+		 * image, wrong for MCUboot — without this override the
+		 * bootloader links at slot0 and the board cannot boot). */
+		zephyr,code-partition = &boot_partition;
+	};
+};
+
+/ {
 	buttons {
 		compatible = "gpio-keys";
 

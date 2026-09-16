@@ -32,7 +32,7 @@ BASE = "https://api.golioth.io"
 ORG = "chris-gammell"
 PROJECT = "connect-demo"
 PACKAGE = "main"
-COHORT = "tikk-demo"
+COHORT = "microros-golioth-demo"
 KEYFILE = os.path.expanduser("~/.golioth/api-key")
 
 CTX = ssl.create_default_context()

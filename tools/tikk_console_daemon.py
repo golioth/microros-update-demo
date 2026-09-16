@@ -161,7 +161,11 @@ with open(LOG, "ab", buffering=0) as out:
                     fd = None
                     continue
                 last_data = time.time()
-                line_buf += chunk
+                # The console mixes \r\n and bare-\r line endings (log
+                # lines end \r\n, printk-direct lines end \r). Normalize
+                # \r to \n so both split; the empty line from a \r\n
+                # pair is dropped by clean_line.
+                line_buf += chunk.replace(b"\r", b"\n")
                 while b"\n" in line_buf:
                     line, line_buf = line_buf.split(b"\n", 1)
                     emit(line)

@@ -26,6 +26,8 @@ LOG_MODULE_REGISTER(pouch_setup, LOG_LEVEL_INF);
 
 #include "credentials.h"
 
+#include "fw_update.h"
+
 #include <app_version.h>
 
 #define POUCH_THREAD_STACK 4096
@@ -66,6 +68,18 @@ K_WORK_DELAYABLE_DEFINE(disconnect_work, disconnect_work_handler);
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
+    /* Auto-resync: if an OTA download is pending (manifest received,
+     * data not yet) or in flight, re-arm the sync flag BEFORE the
+     * re-advertising restart — the gateway sees the flag on its next
+     * scan and reconnects, retrying the downlink instead of hanging.
+     * (Sustained-download BLE drops — supervision timeouts — were
+     * stalling OTAs until a manual board reset.) */
+    if (fw_download_pending || fw_downloading)
+    {
+        pouch_gatt_adv_req_sync(&service_data, true);
+        LOG_INF("OTA pending/in flight — sync flag re-armed for auto-retry");
+    }
+
     LOG_INF("BLE disconnected (reason 0x%02x) — re-advertising", reason);
 
     k_work_schedule(&disconnect_work, K_SECONDS(1));
@@ -196,10 +210,15 @@ static void pouch_event_handler(enum pouch_event event, void *ctx)
         LOG_INF("Pouch: session started (gateway connected)");
         break;
     case POUCH_EVENT_SESSION_END:
-        /* Session complete — clear the sync-request flag until the next
-         * button press. */
-        pouch_gatt_adv_req_sync(&service_data, false);
-        bt_le_adv_update_data(ad, ARRAY_SIZE(ad), NULL, 0);
+        /* Session complete — clear the sync-request flag unless an OTA
+         * download is pending or in flight (keep it armed so the
+         * gateway reconnects for the data downlink: one button press
+         * carries the whole update arc). */
+        if (!fw_download_pending && !fw_downloading)
+        {
+            pouch_gatt_adv_req_sync(&service_data, false);
+            bt_le_adv_update_data(ad, ARRAY_SIZE(ad), NULL, 0);
+        }
         LOG_INF("Pouch: session ended");
         break;
     default:

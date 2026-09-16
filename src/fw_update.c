@@ -37,6 +37,7 @@ LOG_MODULE_REGISTER(fw_update, LOG_LEVEL_INF);
  * micro-ROS publishers stand down (fw_downloading, see main.c), and the
  * LED matrix shows the download progress bar (check_progress). */
 volatile bool fw_downloading;
+volatile bool fw_download_pending;
 
 static const struct device *const leds = DEVICE_DT_GET_ANY(issi_is31fl3731);
 
@@ -109,6 +110,7 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
     if (is_last)
     {
         fw_downloading = false;
+        fw_download_pending = false;
         LOG_INF("Image written; rebooting to apply upgrade");
 
         err = boot_request_upgrade(BOOT_SWAP_TYPE_TEST);
@@ -142,6 +144,11 @@ static void ota_manifest_receive(const struct golioth_ota_manifest_component *co
         {
             LOG_INF("Marking %s for download", components[i].name);
             golioth_ota_mark_for_download(components[i].name);
+            /* The data arrives in the NEXT session — pouch_setup
+             * re-arms the sync flag (see fw_download_pending) so the
+             * gateway reconnects without a second button press, and
+             * retries automatically if the link drops mid-download. */
+            fw_download_pending = true;
         }
         else
         {

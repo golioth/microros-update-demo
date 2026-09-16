@@ -31,3 +31,9 @@
  * secondary slot. Volatile: written from the pouch downlink path,
  * read from the main sim loop and the micro-ROS publish timer. */
 extern volatile bool fw_downloading;
+
+/* True between "marked for download" (manifest) and download end.
+ * pouch_setup watches it to re-arm the sync flag on BLE disconnect, so
+ * a dropped link mid-download retries automatically instead of hanging
+ * until a human resets the board. */
+extern volatile bool fw_download_pending;

@@ -146,6 +146,59 @@ void display_framebuffer(const struct device *dev, uint16_t *fb)
     back_frame = write_frame;
 }
 
+void display_text(const struct device *dev, const char *text, uint8_t brightness)
+{
+    static uint8_t back_frame;
+
+    /* Write to the back frame (not currently displayed) */
+    uint8_t write_frame = back_frame ^ 1;
+
+    is31fl3731_set_picture_mode(dev);
+    is31fl3731_select_frame_to_write(dev, write_frame);
+    is31fl3731_frame_clear(dev);
+    is31fl3731_frame_set_brightness(dev, brightness);
+
+    uint16_t fb[9] = {0};
+
+    /* Render 5x8-font glyphs left-to-right, one pixel column at a time,
+     * clipping anything past the 15-column display (write_font_to_fb
+     * would shift bits off the end of the 16-bit rows). Glyph stride is
+     * 6 columns: 5 px glyph + 1 px space. */
+    uint8_t col = 0;
+    for (const char *p = text; (*p != '\0') && (col < 15); p++)
+    {
+        char c = *p;
+        if ((c < 32) || (c > 126))
+        {
+            c = ' ';
+        }
+
+        for (uint8_t glyph_col = 0; glyph_col < 5; glyph_col++)
+        {
+            if ((col + glyph_col) > 15)
+            {
+                break;
+            }
+            uint8_t slice = font5x8[((c - 32) * 5) + glyph_col];
+            for (uint8_t bit = 0; bit < 8; bit++)
+            {
+                if (slice & (1 << bit))
+                {
+                    fb[bit] |= (uint16_t)(1 << (col + glyph_col));
+                }
+            }
+        }
+
+        col += 6;
+    }
+
+    fill_frame_from_buffer(dev, fb, write_frame, false, false);
+
+    /* Flip to the newly written frame */
+    is31fl3731_picture_set_display_frame(dev, write_frame);
+    back_frame = write_frame;
+}
+
 void scroll_hex(const struct device *dev, const char *message, uint32_t delay_ms)
 {
     display_clear_internal(dev, 1, 20);

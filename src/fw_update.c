@@ -23,18 +23,20 @@ LOG_MODULE_REGISTER(fw_update, LOG_LEVEL_INF);
 
 #include <app_version.h>
 
+#include <stdio.h>
+
 #include <zephyr/device.h>
 
 #include "fw_update.h"
 #include "tikk_led_matrix.h"
 
 /* OTA version identity for the demo pair: the "before" build (temp
- * publisher off) reports 0.1.0 so the Golioth release for 0.2.0 triggers
+ * publisher off) reports 0.1.1 so the Golioth release for 0.2.1 triggers
  * the update; the "after" build reports the VERSION-file string. */
 #if IS_ENABLED(CONFIG_TIKK_TEMP_PUBLISHER)
 #define FW_VERSION_STRING APP_VERSION_STRING
 #else
-#define FW_VERSION_STRING "0.1.0"
+#define FW_VERSION_STRING "0.1.1"
 #endif
 
 /* Set while image blocks are being written: the liquid sim and the
@@ -44,9 +46,9 @@ volatile bool fw_downloading;
 
 static const struct device *const leds = DEVICE_DT_GET_ANY(issi_is31fl3731);
 
-/* Bar brightness: brighter than the liquid display (10) so the update
- * is obvious on camera during the demo. */
-#define OTA_BAR_BRIGHTNESS 50
+/* OTA text brightness: brighter than the liquid display (10) so the
+ * update is obvious on camera during the demo. */
+#define OTA_TEXT_BRIGHTNESS 50
 
 /* Last % shown on the bar; file-scope so it resets cleanly per download. */
 static uint8_t ota_last_pct = 255;
@@ -66,9 +68,14 @@ static void check_progress(uint32_t offset)
     if (pct != ota_last_pct)
     {
         LOG_INF("OTA progress: %u%%", pct);
-        /* The % AS a filling bar on the LED matrix (15 columns = 100%) —
-         * the demo's "watch it download" moment. Non-blocking. */
-        display_countdown_columns(leds, (pct * 15U) / 100U, OTA_BAR_BRIGHTNESS);
+        /* The % AS TEXT on the LED matrix — digits ticking up (" 5%",
+         * "50%", "99%") is the demo's "watch it download" moment. The
+         * %-glyph's rightmost columns clip off the 15-column display
+         * (known geometry — matches the tikk-fleet demo's look).
+         * Non-blocking. */
+        char pct_str[8];
+        snprintf(pct_str, sizeof(pct_str), "%2u%%", pct);
+        display_text(leds, pct_str, OTA_TEXT_BRIGHTNESS);
         ota_last_pct = pct;
     }
 }
@@ -83,7 +90,7 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
         download_started = true;
         fw_downloading = true;
         ota_last_pct = 255;
-        display_countdown_columns(leds, 0, OTA_BAR_BRIGHTNESS);
+        display_text(leds, " 0%", OTA_TEXT_BRIGHTNESS);
         LOG_INF("Firmware download started");
     }
     if (0 == offset)
@@ -123,7 +130,7 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
         }
 #endif
         /* Checkmark flourish on the matrix (1 s, self-clears) */
-        display_sent_pattern(leds, OTA_BAR_BRIGHTNESS);
+        display_sent_pattern(leds, OTA_TEXT_BRIGHTNESS);
         k_sleep(K_SECONDS(1));
         sys_reboot(SYS_REBOOT_WARM);
     }

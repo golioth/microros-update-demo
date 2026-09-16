@@ -32,6 +32,22 @@ void display_clear(const struct device *dev);
 void display_framebuffer(const struct device *dev, uint16_t *fb);
 
 /**
+ * @brief Render a short static text string on the display (5x8 font)
+ *
+ * Non-blocking: renders glyphs left-to-right into the back frame and
+ * flips to it, then returns (unlike scroll_message, which blocks until
+ * the scroll finishes). Text wider than the 15-column display is
+ * CLIPPED on the right — ~2.5 glyphs fit; the last glyph may be
+ * partially cut off (the font's 8th row also clips on the physical
+ * 7-row matrix).
+ *
+ * @param dev An instance of an is31fl3731 LED matrix driver
+ * @param text Null-terminated string; chars outside 32..126 render as space
+ * @param brightness Brightness percentage [0..100]
+ */
+void display_text(const struct device *dev, const char *text, uint8_t brightness);
+
+/**
  * @brief Display animated scrolling arrows
  *
  * Show a scrolling chevron (arrow) pattern on the Tikk display. This function uses the animation

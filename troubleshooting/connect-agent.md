@@ -8,11 +8,27 @@ by when each failure mode appears in the chain.
 > v0.2.0 gateway flow are PROVEN GOOD end-to-end — reference ble_gatt
 > device on nRF52840-DK (Zephyr 4.4.0) → pouch v0.2.0 gateway on
 > FRDM-RW612 (Zephyr 4.4.0) → production cloud all worked, device
-> checked in. The remaining defect is OUR device build: the Tikk app on
-> NCS v3.0.1 (Zephyr 4.0.99-ncs1 + SoftDevice Controller) corrupts the
-> device-certificate somewhere in the BLE SAR/notification leg — the
-> server's 4.00 responses were legitimate rejections of mangled bytes.
-> Fix in flight: port the Tikk app to the pure Zephyr 4.4 workspace.
+> checked in.
+>
+> **ROOT CAUSE FOUND 2026-09-15 evening — supersedes the earlier "NCS
+> BLE SAR corruption" theory below.** It was OUR APP, on BOTH toolchains:
+> `pouch_setup.c` freed the certificate buffer right after `pouch_init()`,
+> but pouch's `cert_device_set()` keeps only the buffer POINTER and reads
+> it at every session — so the transmitted "cert" was whatever bytes had
+> reused that heap block (micro-ROS, sim). Server 4.00s were legitimate
+> rejections of heap garbage. The NCS/SDC SAR leg was innocent all along.
+> Fixed by NOT freeing (like the reference sample); commit 1a866c4.
+> The 4.4 port ALSO surfaced two more blockers, both fixed:
+> (a) gateway `CONFIG_BT_MAX_PAIRED=1` — the DK monopolized the single
+> bond slot, every other device got -ENOMEM logged as "(244)" (the
+> sample's log masks the return to its low byte; -12 & 0xff); fixed in
+> ~/gateway-ws/gateway-usb-console.conf (MAX_PAIRED=4 + overwrite-oldest).
+> (b) the 4.4 legacy CDC console TX wedges unless a host holds DTR
+> continuously from enumeration — the reader daemon IS required console
+> infrastructure, not a convenience.
+> Verified: physical P0.11 press → gateway session → cert uploaded
+> intact → tikk-robot checks in to the Golioth console (project
+> connect-demo, Chris's personal org).
 
 ## 1. Gateway never attempts a BLE connection
 

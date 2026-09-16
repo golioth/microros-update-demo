@@ -427,6 +427,13 @@ int main(void)
 	display_clear(leds);
 	printk("sensors ready, starting sim (%d ms tick)\n", TICK_MS);
 
+	/* Firmware version on the matrix at boot — the same "vX.Y.Z"
+	 * scroll the tikk-fleet demo showed (led_message("v" ...) there).
+	 * FW_VERSION_STRING is the OTA identity reported to the cloud, so
+	 * the boot screen says which half of the demo pair is running
+	 * (0.1.1 before / 0.2.1 after). Blocking ~3 s, like the fleet demo. */
+	scroll_message(leds, "v" FW_VERSION_STRING, 40);
+
 	while (true) {
 		/* fw_update owns the LED matrix during an OTA download —
 		 * stand the liquid sim down until it finishes. */

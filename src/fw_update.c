@@ -30,14 +30,8 @@ LOG_MODULE_REGISTER(fw_update, LOG_LEVEL_INF);
 #include "fw_update.h"
 #include "tikk_led_matrix.h"
 
-/* OTA version identity for the demo pair: the "before" build (temp
- * publisher off) reports 0.1.1 so the Golioth release for 0.2.1 triggers
- * the update; the "after" build reports the VERSION-file string. */
-#if IS_ENABLED(CONFIG_TIKK_TEMP_PUBLISHER)
-#define FW_VERSION_STRING APP_VERSION_STRING
-#else
-#define FW_VERSION_STRING "0.1.1"
-#endif
+/* FW_VERSION_STRING lives in fw_update.h — shared with main.c, which
+ * scrolls it on the LED matrix at boot. */
 
 /* Set while image blocks are being written: the liquid sim and the
  * micro-ROS publishers stand down (fw_downloading, see main.c), and the

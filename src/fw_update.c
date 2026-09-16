@@ -23,6 +23,11 @@ LOG_MODULE_REGISTER(fw_update, LOG_LEVEL_INF);
 
 #include <app_version.h>
 
+#include <zephyr/device.h>
+
+#include "fw_update.h"
+#include "tikk_led_matrix.h"
+
 /* OTA version identity for the demo pair: the "before" build (temp
  * publisher off) reports 0.1.0 so the Golioth release for 0.2.0 triggers
  * the update; the "after" build reports the VERSION-file string. */
@@ -32,24 +37,39 @@ LOG_MODULE_REGISTER(fw_update, LOG_LEVEL_INF);
 #define FW_VERSION_STRING "0.1.0"
 #endif
 
+/* Set while image blocks are being written: the liquid sim and the
+ * micro-ROS publishers stand down (fw_downloading, see main.c), and the
+ * LED matrix shows the download progress bar (check_progress). */
+volatile bool fw_downloading;
+
+static const struct device *const leds = DEVICE_DT_GET_ANY(issi_is31fl3731);
+
+/* Bar brightness: brighter than the liquid display (10) so the update
+ * is obvious on camera during the demo. */
+#define OTA_BAR_BRIGHTNESS 50
+
+/* Last % shown on the bar; file-scope so it resets cleanly per download. */
+static uint8_t ota_last_pct = 255;
+
 static uint32_t fw_size = 1;
 static struct flash_img_context flash_context;
 static bool download_started;
 
 static void check_progress(uint32_t offset)
 {
-    static uint8_t last_pct = 255;
-
     uint8_t pct = (offset * 100U) / fw_size;
     if (pct > 100)
     {
         pct = 100;
     }
 
-    if (pct != last_pct)
+    if (pct != ota_last_pct)
     {
         LOG_INF("OTA progress: %u%%", pct);
-        last_pct = pct;
+        /* The % AS a filling bar on the LED matrix (15 columns = 100%) —
+         * the demo's "watch it download" moment. Non-blocking. */
+        display_countdown_columns(leds, (pct * 15U) / 100U, OTA_BAR_BRIGHTNESS);
+        ota_last_pct = pct;
     }
 }
 
@@ -61,6 +81,9 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
     if (!download_started)
     {
         download_started = true;
+        fw_downloading = true;
+        ota_last_pct = 255;
+        display_countdown_columns(leds, 0, OTA_BAR_BRIGHTNESS);
         LOG_INF("Firmware download started");
     }
     if (0 == offset)
@@ -84,6 +107,9 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
 
     if (is_last)
     {
+        fw_downloading = false;
+        LOG_INF("Image written; rebooting to apply upgrade");
+
         err = boot_request_upgrade(BOOT_SWAP_TYPE_TEST);
         if (err)
         {
@@ -91,13 +117,13 @@ static void ota_main_receive(const void *data, size_t offset, size_t len, bool i
             return;
         }
 
-        LOG_INF("Image written; rebooting to apply upgrade");
-
 #if IS_ENABLED(CONFIG_LOG)
         while (log_process())
         {
         }
 #endif
+        /* Checkmark flourish on the matrix (1 s, self-clears) */
+        display_sent_pattern(leds, OTA_BAR_BRIGHTNESS);
         k_sleep(K_SECONDS(1));
         sys_reboot(SYS_REBOOT_WARM);
     }

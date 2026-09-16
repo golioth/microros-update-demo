@@ -17,6 +17,8 @@
 
 #include "tikk_led_matrix.h"
 
+#include "fw_update.h"
+
 #ifdef CONFIG_MICROROS
 #include <version.h>
 #if ZEPHYR_VERSION_CODE >= ZEPHYR_VERSION(4, 4, 0)
@@ -142,6 +144,14 @@ static void tilt_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
 	RCLC_UNUSED(last_call_time);
 	if (timer == NULL) {
+		return;
+	}
+
+	/* While an OTA image downloads, fw_update owns the LED matrix
+	 * (progress bar) and publishing stands down — CPU for the flash
+	 * writes, plus a cleaner demo story. The timer keeps firing, so
+	 * /tilt + /temp resume on their own when the download ends. */
+	if (fw_downloading) {
 		return;
 	}
 
@@ -418,6 +428,12 @@ int main(void)
 	printk("sensors ready, starting sim (%d ms tick)\n", TICK_MS);
 
 	while (true) {
+		/* fw_update owns the LED matrix during an OTA download —
+		 * stand the liquid sim down until it finishes. */
+		if (fw_downloading) {
+			k_msleep(TICK_MS);
+			continue;
+		}
 		if (tick() < 0) {
 			printk("sensor fetch failed\n");
 		}

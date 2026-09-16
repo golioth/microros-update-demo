@@ -10,6 +10,13 @@
  * Stripped vs tikk-pouch-demo: buttons, longpress, littlefs.
  */
 
+/* MCUboot flash layout (64 KB boot; storage kept at 0xf8000 so the
+ * provisioned credentials survive a bootloader+app reflash). Shared
+ * with sysbuild/mcuboot.overlay so both images agree on the map. The
+ * plain (non-sysbuild) build is unaffected: it links at 0x0 and only
+ * touches storage_partition, whose address is unchanged. */
+#include "../sysbuild/flash-layout.dtsi"
+
 / {
 
 	reg_vcc_pin_3v3: reg-vcc-pin-3v3 {

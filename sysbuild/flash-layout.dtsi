@@ -1,0 +1,53 @@
+/*
+ * Tikk MCUboot flash layout — 64 KB bootloader.
+ *
+ * Upstream's default nrf52840_partition.dtsi gives MCUboot only 48 KB
+ * (0x0..0xc000), but this app's MCUboot config (RSA-2048 verification +
+ * USB serial recovery + indication LED) links at ~62 KB — it would
+ * overwrite the first 13 KB of slot0. This layout matches the NCS-era
+ * sysbuild geometry the app was verified booting with:
+ *
+ *   boot    0x00000..0x10000  (mcuboot, ~62 KB)
+ *   slot0   0x10000..0x84000  (app; links via zephyr,code-partition)
+ *   slot1   0x84000..0xf8000  (OTA download target, equal size to slot0)
+ *   storage 0xf8000..0x100000 (littlefs credentials)
+ *
+ * storage stays at the SAME address the plain (non-mcuboot) build uses,
+ * so provisioned certs survive flashing the bootloader + app.
+ *
+ * Included by BOTH images so the bootloader and app agree on the map:
+ *   - boards/promicro_nrf52840.overlay (the app image; the plain build
+ *     is unaffected — it links at 0x0 and only touches storage)
+ *   - sysbuild/mcuboot.overlay (the mcuboot image)
+ */
+
+&flash0 {
+	/delete-node/ partitions;
+
+	partitions {
+		compatible = "zephyr,mapped-partition";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0x00010000>;
+		};
+
+		slot0_partition: partition@10000 {
+			label = "image-0";
+			reg = <0x00010000 0x00074000>;
+		};
+
+		slot1_partition: partition@84000 {
+			label = "image-1";
+			reg = <0x00084000 0x00074000>;
+		};
+
+		storage_partition: partition@f8000 {
+			label = "storage";
+			reg = <0x000f8000 0x00008000>;
+		};
+	};
+};

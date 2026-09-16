@@ -3,6 +3,10 @@
  * (from tikk-fleet tikk-pouch-demo — P0.11 button on the Tikk add-on).
  */
 
+/* Shared flash layout (64 KB boot — the default 48 KB does not fit
+ * this MCUboot config). Must match the app image's view of the map. */
+#include "flash-layout.dtsi"
+
 / {
 	buttons {
 		compatible = "gpio-keys";

@@ -431,7 +431,7 @@ int main(void)
 	 * scroll the tikk-fleet demo showed (led_message("v" ...) there).
 	 * FW_VERSION_STRING is the OTA identity reported to the cloud, so
 	 * the boot screen says which half of the demo pair is running
-	 * (0.1.1 before / 0.2.1 after). Blocking ~3 s, like the fleet demo. */
+	 * (0.1.2 before / 0.2.2 after). Blocking ~3 s, like the fleet demo. */
 	scroll_message(leds, "v" FW_VERSION_STRING, 40);
 
 	while (true) {

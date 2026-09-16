@@ -16,7 +16,7 @@
 #include <app_version.h>
 
 /* OTA version identity for the demo pair: the "before" build (temp
- * publisher off) reports 0.1.1 so the Golioth release for 0.2.1 triggers
+ * publisher off) reports 0.1.2 so the Golioth release for 0.2.2 triggers
  * the update; the "after" build reports the VERSION-file string.
  * The same string is shown on the LED matrix at boot ("vX.Y.Z" scroll,
  * like the tikk-fleet demo) so the screen tells you which half of the
@@ -24,7 +24,7 @@
 #ifdef CONFIG_TIKK_TEMP_PUBLISHER
 #define FW_VERSION_STRING APP_VERSION_STRING
 #else
-#define FW_VERSION_STRING "0.1.1"
+#define FW_VERSION_STRING "0.1.2"
 #endif
 
 /* True while an OTA image download is being written to the mcuboot

@@ -8,18 +8,37 @@
   daemon runs.
 - Commands: write a line to /tmp/tikk-cmd.fifo (e.g. `fs ls /lfs1`).
 - All console output lands in /tmp/tikk-console-live.log (append).
-- OTA-related lines are written wrapped in ANSI escapes (black on
-  yellow, \\x1b[30;43m) so `tail -f` highlights the OTA arc — the
-  manifest/version line, download progress, and the swap/reboot.
+
+Log hygiene (the Zephyr shell is VT100-chatty: bold-green prompts,
+cursor-left + erase-to-end-of-screen redraws, CRs, and it re-emits every
+log line a second time prefixed by its prompt — rendered by `tail -f`
+that looks like the log "overwrites itself"):
+- ALL ANSI/VT100 CSI sequences and CRs are stripped before logging, so
+  tail -f renders stable, non-destructive lines.
+- The shell's immediate prompt-prefixed redraw copies of a line (and
+  bare prompts) are dropped, halving the noise. Real repeats are safe:
+  log lines carry timestamps, so only the byte-identical immediate
+  copy is suppressed (window: last 5 lines).
+- OTA-related lines are wrapped in ANSI escapes (black on yellow,
+  \\x1b[30;43m) so `tail -f` highlights the OTA arc — the manifest/
+  version line, download progress, and the swap/reboot. Stripping
+  first means nothing can interrupt the highlight mid-line.
 """
-import os, termios, fcntl, array, select, subprocess, time
+import collections
+import os
+import re
+import select
+import subprocess
+import termios
+import fcntl
+import array
+import time
 
 TIKK_SERIAL = "5F5F7992AC89B3D0"
 LOG = "/tmp/tikk-console-live.log"
 FIFO = "/tmp/tikk-cmd.fifo"
 
-# substrings that mark an OTA-relevant line (logged anywhere in the line —
-# the shell prompt often prefixes log lines, so prefix matching is useless)
+# substrings that mark an OTA-relevant line (matched on the CLEANED line)
 OTA_MARKERS = (
     "OTA",            # "OTA manifest: main@X ... (running Y)" / "OTA progress: N%"
     "fw_update",      # the fw_update module's log prefix
@@ -32,8 +51,33 @@ OTA_MARKERS = (
 ANSI_HL = b"\x1b[30;43m"   # black on yellow
 ANSI_RESET = b"\x1b[0m"
 
+ANSI_CSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
+PROMPT = b"uart:~$ "
+
+# byte-identical immediate shell-redraw copies land within a few lines;
+# timestamps make false positives on real events effectively impossible
+recent = collections.deque(maxlen=5)
+
 if not os.path.exists(FIFO):
     os.mkfifo(FIFO)
+
+
+def clean_line(raw):
+    """Strip VT100/ANSI + CRs, drop prompt prefixes and redraw copies.
+
+    Returns the cleaned line bytes, or None if the line should not be
+    logged (bare prompt, or a duplicate of a just-seen line).
+    """
+    line = ANSI_CSI.sub(b"", raw).replace(b"\r", b"")
+    while line.startswith(PROMPT):
+        line = line[len(PROMPT):]
+        line = line.lstrip() if not line.startswith(PROMPT) else line
+    if not line.strip():
+        return None
+    if line in recent:
+        return None
+    recent.append(line)
+    return line
 
 
 def find_port():
@@ -72,17 +116,20 @@ def open_port():
 
 fifo_fd = os.open(FIFO, os.O_RDONLY | os.O_NONBLOCK)
 fd, port = open_port()
-print(f"console daemon: port={port} (OTA lines highlighted)", flush=True)
+print(f"console daemon: port={port} (VT100-stripped, dedup, OTA highlight)", flush=True)
 
 line_buf = b""          # pending bytes of an incomplete line
 last_data = time.time()
 
 with open(LOG, "ab", buffering=0) as out:
-    def write_line(raw, complete):
-        if complete and any(m.encode() in raw for m in OTA_MARKERS):
-            out.write(ANSI_HL + raw + ANSI_RESET + b"\n")
+    def emit(raw_line):
+        cleaned = clean_line(raw_line)
+        if cleaned is None:
+            return
+        if any(m.encode() in cleaned for m in OTA_MARKERS):
+            out.write(ANSI_HL + cleaned + ANSI_RESET + b"\n")
         else:
-            out.write(raw)
+            out.write(cleaned + b"\n")
 
     while True:
         try:
@@ -117,11 +164,11 @@ with open(LOG, "ab", buffering=0) as out:
                 line_buf += chunk
                 while b"\n" in line_buf:
                     line, line_buf = line_buf.split(b"\n", 1)
-                    write_line(line, complete=True)
+                    emit(line)
             elif line_buf and (time.time() - last_data) > 2.0:
-                # tail without newline (e.g. the bare shell prompt) that
-                # has been idle: show it unhighlighted
-                write_line(line_buf, complete=False)
+                # tail without newline (rare after VT100 stripping) that
+                # has been idle: show it unprocessed
+                emit(line_buf)
                 line_buf = b""
         except Exception as e:
             # never die: log, drop the fd, re-resolve next loop

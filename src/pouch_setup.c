@@ -260,7 +260,16 @@ static void pouch_thread(void)
         free_certificate(&config.certificate);
         return;
     }
-    free_certificate(&config.certificate);
+
+    /* Do NOT free_certificate() here: pouch's cert_device_set() stores
+     * only the BUFFER POINTER (shallow struct copy), and reads it at
+     * every session. Freeing after a successful pouch_init() hands the
+     * block back to the heap — later allocations (micro-ROS, sim) reuse
+     * it, and the "certificate" transmitted at session time is whatever
+     * bytes then live there — the server rejects it with CoAP 4.00.
+     * This was the 4.00 root cause all along (present on NCS too; the
+     * "BLE SAR corruption" theory was wrong). The reference ble_gatt
+     * sample keeps the buffer for the app's lifetime — do the same. */
 
     LOG_INF("Pouch initialized");
 

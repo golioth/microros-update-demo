@@ -177,6 +177,11 @@ download is pending/in flight) and `src/fw_update.c`/`fw_update.h`
 - `AX_SIGN` / `AY_SIGN` — flip if water pools the wrong way
 - `DISPLAY_BRIGHTNESS` (modules/tikk-led-matrix/tikk_led_matrix.c)
 
+## Future work
+
+- Per-LED PWM for grayscale water — the display is currently binary
+  on/off; needs PWM-page burst support in the is31fl3731 driver.
+
 ## Troubleshooting
 
 Gateway/BLE/cloud failure modes — the snap's dead-stack cert bug, the

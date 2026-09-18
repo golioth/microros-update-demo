@@ -1,11 +1,15 @@
 si swd
 speed 1000
 connect
-# mcuboot build: flash bootloader + slot-0 app together at 0x0.
-# Use merged.hex (mcuboot + app). NOT mcuboot_primary.hex — despite the
-# name it is ONLY the slot-0 app image (no bootloader; flashing it leaves
-# 0x0 erased and the board faults on boot).
-loadfile /home/chrisg/golioth/microros/build/merged.hex
+# sysbuild MCUboot layout (see sysbuild/flash-layout.dtsi):
+#   boot 0x0..0x10000 (64 KB), slot0 app 0x10000, storage 0xf8000.
+# Load BOTH hexes: MCUboot + the SIGNED slot-0 app (imgtool-signed with
+# MCUboot's bundled RSA dev key by the sysbuild post-build step).
+# loadfile erases only the pages written — the littlefs credentials at
+# 0xf8000 SURVIVE a reflash (no re-provisioning needed).
+# For the "after"/other build dirs, edit the two paths accordingly.
+loadfile /home/chrisg/golioth/microros/build-44-mcu/mcuboot/zephyr/zephyr.hex
+loadfile /home/chrisg/golioth/microros/build-44-mcu/app/zephyr/zephyr.signed.hex
 r
 g
 exit

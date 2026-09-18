@@ -1,187 +1,186 @@
 # Tikk micro-ROS Liquid Tilt Display
 
 Zephyr app for the [Tikk](https://github.com/golioth/tikk-fleet) board
-(promicro_nrf52840 + add-on): a pool of "liquid" lives on the 7x15 LED display
-(IS31FL3731 controller, 7x15 of its 9x16 matrix populated) — calm and covering
-the display at rest, draining toward the low side with a concave corner
-waterline as you tilt, sloshing briefly on fast moves. Tilt data
-is published over USB-CDC micro-ROS to a host agent.
+(promicro_nrf52840 + add-on): a pool of "liquid" lives on the 7x15 LED
+display (IS31FL3731 controller) — calm and covering the display at rest,
+draining toward the low side as you tilt. Tilt data publishes over
+USB-CDC micro-ROS to a host agent, and the whole thing takes **OTA
+firmware updates over BLE** through a pouch gateway — the "before/after"
+demo pair below shows the update landing live on the display itself.
 
-## Progress (updated 2026-09-11)
+## What the OTA demo looks like
 
-**Working, verified on hardware:**
-- [x] West workspace (NCS v3.0.1 / zephyr v4.0.99-ncs1-1, SDK 0.17.0) mirroring tikk-fleet
-- [x] LIS2DH accelerometer + 7x15 LED display (IS31FL3731 controller; 7x15
-      of the 9x16 matrix is populated) on the Tikk add-on board
-- [x] Liquid display model, converged after six iterations:
-      flat water film everywhere at rest + gravity tilt plane + wall-cling
-      meniscus (concave corner waterline), calm settle, one honest slosh on
-      big moves
-- [x] micro-ROS firmware: `geometry_msgs/Vector3Stamped` on `/tilt` at 10 Hz
-      over USB CDC ACM (node `tikk_tilt`), independent from the display sim
-- [x] micro-ROS agent (docker, `microros/micro-ros-agent:kilted`) bridging the
-      board into a live ROS 2 graph
-- [x] Live terminal visualization of x/y/z tilt (`app/host/viz.py` — ANSI
-      scrolling charts with grayscale shading, no dependencies)
-- [x] On-hardware bring-up complete: boot, flashing, USB, display physics all
-      sorted (see git history for the full debugging saga)
+- "before" firmware: tilt display + /tilt publisher. Reports version
+  `0.1.2` (hardcoded in `src/fw_update.h`).
+- "after" firmware: adds the TMP102 temperature publisher on /temp.
+  Reports the `VERSION`-file string (`0.2.2`).
+- Deploy the "after" artifact from the Golioth console → press the
+  board's sync button ONCE → the manifest and the image download are
+  carried across sessions automatically (auto-resync — see below).
+- During the download the LED matrix shows the percentage ticking up
+  as text (" 5%" → "50%" → "99%"), the liquid display and the
+  publishers stand down, and a checkmark flashes when the image is
+  complete. The board reboots into the new firmware and scrolls its
+  version across the matrix ("v0.2.2") at boot.
+- The payoff in the host viz: the /temp panel is blank on "before"
+  and fills with live readings once "after" boots.
 
-**Next up:**
-- [ ] Pouch/Golioth transport integration — blocked on a libc conflict:
-      libmicroros is built against newlib while pouch expects picolibc
-      (known, documented; needs a build spike or a patch upstream)
-- [ ] Per-LED PWM for grayscale water — needs is31fl3731 driver PWM-page
-      burst support (display is currently binary on/off)
+The % display and version scroll are drawn by the firmware that is
+RUNNING, so the first update after changing the pair shows the
+previous build's visuals; every one after that shows the new.
 
-## Workspace layout
+## Workspace & build (pure Zephyr 4.4)
 
-This repo is the `app/` directory of a west workspace rooted at
-`~/golioth/microros`. No pouch/BLE/mcuboot by design — micro-ROS and the
-display work independently first; pouch transport gets glued in later.
+Built against a pure-Zephyr workspace (NOT NCS — the port traps are in
+`troubleshooting/connect-agent.md` §3d):
 
-- `app/` — this repo (Zephyr application + tikk-led-matrix module copy +
-  host-side agent & viz in app/host/)
-  - `app/host/` — host-side micro-ROS agent (docker compose) + viz.py
-- `deps/` — west workspace modules (NCS v3.0.1 / zephyr v4.0.99-ncs1-1,
-  is31fl3731 driver, pixel_font, micro_ros_zephyr_module)
-- `.venv/` — python venv (west + build deps)
+    cd ~/gateway-ws            # zephyr v4.4.0, pouch v0.2.0 (modules/lib/pouch),
+                               # micro-ROS module (deps/modules/lib/micro_ros_zephyr_module),
+                               # is31fl3731 + pixel_font modules — see its manifest/west.yml
+    source ~/golioth/microros/.venv/bin/activate
+    export MICROROS_ZEPHYR_MODULE_PATH=~/gateway-ws/deps/modules/lib/micro_ros_zephyr_module
+    export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-1.0.1
 
-## Setup
+    # BEFORE build (temp publisher OFF — reports 0.1.2):
+    west build --sysbuild -b promicro_nrf52840 \
+        -d ~/golioth/microros/build-44-mcu ~/golioth/microros/app -- \
+        -DCONFIG_TIKK_TEMP_PUBLISHER=n
 
-    cd ~/golioth/microros
-    source .venv/bin/activate
-    west update
+    # AFTER build (default — reports the VERSION-file string):
+    west build --sysbuild -b promicro_nrf52840 \
+        -d ~/golioth/microros/build-44-mcu-after ~/golioth/microros/app
 
-    # Apply the local module patches (see patches/) — 0001 because colcon
-    # caches CMake flags across libc/Kconfig changes and stale flags break
-    # the cross-build; 0002 defines __STDC_WANT_LIB_EXT1__=1 for all
-    # micro-ROS packages (fixes picolibc/rcutils Annex K __errno_t error);
-    # 0003 fixes the transports' RX ring buffer aliasing the TX buffer's
-    # storage (random session-establishment corruption/wedges):
-    git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0001-colcon-cmake-clean-cache.patch
-    git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0002-picolibc-annex-k-cflags.patch
-    git -C deps/modules/lib/micro_ros_zephyr_module apply ../app/patches/0003-transport-rx-buffer-aliasing.patch
+`west update` WIPES the micro-ROS module patches — re-apply
+`0001`–`0004` and `0006`–`0009` from `patches/` afterwards (`0005` is
+NCS-only), then `rm -rf` the module's `micro_ros_src/build+install` for
+a clean colcon rebuild.
 
-    uv pip install -r deps/zephyr/scripts/requirements.txt -r deps/nrf/scripts/requirements.txt
-    uv pip install colcon-common-extensions catkin_pkg empy lark
+Sysbuild produces MCUboot (64 KB at `0x0`, see `sysbuild/flash-layout.dtsi`)
+plus the signed app in slot 0 (`0x10000`); slot 1 (`0x84000`) receives
+OTA downloads; the littlefs credentials partition stays at `0xf8000`
+so provisioned certs survive a reflash. The OTA artifact to upload to
+Golioth is `<build-dir>/app/zephyr/zephyr.signed.bin` (imgtool-signed
+with MCUboot's bundled RSA dev key by the sysbuild step).
 
-## Build & flash
+## Flashing (J-Link jig)
 
-SDK 0.17.0 is required (matches tikk-fleet; SDK 0.17.4's picolibc conflicts
-with zephyr v4.0.99-ncs1-1). Use the ABSOLUTE path — `~/`-relative paths
-silently resolve wrong in non-login shells (e.g. agent sessions where $HOME
-is overridden), and Zephyr then auto-detects 0.17.4 instead:
+    JLinkExe -device nRF52840_xxAA -if SWD -speed 1000 \
+        -SelectEmuBySN 851000760 -CommanderScript app/flash.jlink
 
-    ZEPHYR_SDK_INSTALL_DIR=/home/chrisg/zephyr-sdk-0.17.0 west build -b promicro_nrf52840 app
+`flash.jlink` loads both hexes (MCUboot + signed app) from the default
+build dir and resets. Flashing erases only the pages written — the
+credentials at `0xf8000` are preserved.
 
-First build cross-compiles all of micro-ROS (~25 ROS 2 repos) as part of the
-build — expect several minutes. Subsequent builds are incremental.
+## Provisioning credentials (one-time per device)
 
-    west flash   # (board not connected yet — flash method TBD, see Notes)
+Create the device on the Golioth console (download its DER cert/key
+pair), then upload them to the board's littlefs via the shell SMP
+transport (stop the console daemon first — it owns the port):
 
-## Run the micro-ROS agent (host)
+    uv pip install smpmgr
+    smpmgr --port /dev/tikk-console file upload \
+        ~/Downloads/<device>.crt.der /lfs1/credentials/crt.der
+    smpmgr --port /dev/tikk-console file upload \
+        ~/Downloads/<device>.key.der /lfs1/credentials/key.der
 
-Bring-up order matters (the firmware's agent handshake is one-shot and
-fail-fast): reset/power the board FIRST (it parks at "Waiting for agent
-connection"), THEN start the agent — its port-open is the handshake
-trigger. After any board reset/replug, recreate the agent container
-(`--force-recreate`, not `restart`) so its device bind re-resolves.
-Conversely, after ANY agent restart/recreate, reset the board again —
-the firmware's client never re-establishes a dead session and will
-publish into the void until rebooted.
+## Cloud setup (Golioth console)
 
-One-time host setup — keep ModemManager off the board's CDC ports (it
-probes ttyACM1 at every enumeration, asserts DTR, and burns the
-handshake; see the rule file for the full story):
+1. **Package** (OTA → Packages): create `main` — the name the firmware
+   registers its OTA component under.
+2. **Artifacts** (package page → New Version): upload each build's
+   `zephyr.signed.bin`. The version string must match what the firmware
+   reports — `0.1.2` for the before build, the VERSION-file string for
+   the after build — or the device will loop updates (or refuse them).
+   Deployed artifacts are immutable: to ship changed binaries, bump the
+   pair (VERSION file + the hardcoded before-string) and upload as new
+   versions.
+3. **Cohort**: create one, assign the device to it.
+4. **Deploy**: pick the package version you want the cohort to run.
+   The active deployment is the desired state — a device that checks in
+   on an older version gets the update automatically.
 
-    sudo cp app/host/99-microros-zephyr-cdc.rules /etc/udev/rules.d/
-    sudo udevadm control --reload-rules
-    sudo systemctl stop ModemManager
+`tools/ota_deploy.py` wraps the same REST calls (list/upload/deploy)
+if you'd rather script it; the API key lives at `~/.golioth/api-key`.
 
-    cd app/host && docker compose up -d
+## Running the demo
 
-## Visualizing /tilt
+Press the sync button (P0.11 on the add-on) once. With an active
+deployment targeting a different version than the running firmware:
 
-The agent and any ROS 2 containers must set `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`
-— Fast DDS's shared-memory transport silently drops data across container
-/dev/shm boundaries (symptom: topic lists, but echo gets nothing).
+- ~3 s: gateway connects, pouch session, manifest arrives
+- the sync flag re-arms itself (auto-resync) — no second press needed —
+  and the data session starts; the % text ticks up on the matrix
+  (~70–80 s for a ~410 KB image through the RW612 gateway)
+- checkmark, reboot, MCUboot swap, new firmware — its version scrolls
+  across the matrix at boot
+- a BLE drop mid-download no longer hangs the update: the flag re-arms
+  and the download retries automatically
 
-Live scrolling charts (x/y/z) in the terminal:
+Auto-resync is in `src/pouch_setup.c` (re-arms on disconnect while a
+download is pending/in flight) and `src/fw_update.c`/`fw_update.h`
+(`fw_download_pending`).
 
-    docker run --rm --net=host -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
-      -v ~/golioth/microros/app/host:/host:ro ros:kilted-ros-core \
-      python3 /host/viz.py
+### Gateways
 
-Plain message stream:
+- **RW612 running the pouch v0.2.0 gateway sample** (fast path,
+  ~5.7 KB/s): the known-good demo gateway. Keep its console on a reader
+  for observability (`tools/gateway_reader_v2.py` pattern — resolve the
+  port by USB serial `83F4…`, never by ttyACM number).
+- **connect-agent snap**: verified working end-to-end on 2026-09-16
+  (pairing, device-cert upload accepted, OTA delivered) but ~13x
+  slower (~435 B/s — one GATT write per ~550 ms). Pairing hygiene
+  applies after every device reset: `bluetoothctl remove <MAC>` +
+  restart the gateway, or you get an auth-failure connect loop
+  (reason 0x05). A stuck `EALREADY`-on-discovery state (snap/BlueZ
+  D-Bus) clears with `sudo systemctl restart bluetooth`.
 
-    docker run --rm --net=host -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
-      ros:kilted-ros-core ros2 topic echo /tilt
+## Host-side setup
 
-Then from any ROS 2 machine/container:
-
-    ros2 topic list   # expect /tilt
-    ros2 topic echo /tilt
+- **Console daemon** (do not open the console CDC with anything else):
+  `python3 tools/tikk_console_daemon.py` — holds DTR (the 4.4 CDC
+  console goes silent without it), resolves the port by USB serial on
+  every re-enumeration, strips the shell's VT100 chatter, highlights
+  OTA lines yellow in `tail -f /tmp/tikk-console-live.log`, and takes
+  shell commands via `echo "sync" > /tmp/tikk-cmd.fifo`.
+- **micro-ROS agent**: `cd host && docker compose up -d` — with the
+  CDC-renumber ritual: after ANY board reset/replug use
+  `docker compose up -d --force-recreate` (restart reuses the stale
+  device bind), and if a burned handshake has killed the device's
+  client ("micro-ROS error N" in the console log), reset the board.
+  "Waiting for agent connection" in the log means it will wake on the
+  agent's DTR — that's the healthy parked state.
+- **viz**: `docker run --rm --net=host -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+  -v ~/golioth/microros/app/host:/host:ro ros:kilted-ros-core python3
+  /host/viz.py` — scrolling tilt charts + the temp panel that fills
+  when the "after" firmware lands.
 
 ## How it works
 
 - LIS2DH polled at 20 Hz; low-pass filtered tilt tilts the water's
   equilibrium plane (unfiltered accel noise keeps the water agitated)
-- "Flat tray + meniscus" liquid model: at rest a water film covers the whole
-  display; tilt drains it toward the low side/corners. A wall-cling term
-  keeps water hugging edges and corners slightly past the flat waterline,
-  giving the concave corner meniscus
+- "Flat tray + meniscus" liquid model: volume-conserving water-fill
+  over a tilting floor with wall-cling for the concave corners
 - Binary threshold render: depth > SURF_THRESH = LED on
-- micro-ROS thread publishes `geometry_msgs/Vector3Stamped` (filtered accel,
-  m/s^2) on `/tilt` at 10 Hz over USB CDC ACM to the agent
+- micro-ROS thread publishes `geometry_msgs/Vector3Stamped` on `/tilt`
+  at 10 Hz (plus `std_msgs/Float32` on `/temp` at 1 Hz in the "after"
+  build) over USB CDC ACM to the host agent
+- pouch v0.2.0 over BLE GATT: the sync button sets the sync-request
+  flag in the advertisement; a gateway sees it, connects, and runs a
+  session (device cert upload + uplink/downlink blocks) to the cloud
 
-## Tuning knobs (app/src/main.c)
+## Tuning knobs (src/main.c)
 
-- `WATER_LEVEL` — TOTAL water volume (this × cell count). Flat => uniform film
-  everywhere; resting on the long side => ~2-row pool. Raise/lower to change
-  how much water is in the tray
-- `WALL_CLING` — how strongly water hugs edges/corners (meniscus strength)
-- `PLANE_SCALE` — how far a given tilt moves the water
-- `PLANE_PULL` — how fast water chases its equilibrium
-- `WAVE_DAMP` — velocity RETENTION per tick; lower = settles faster (0.97 rings ~2s, 0.80 settles in ~0.5s)
-- `WAVE_K` — wave propagation stiffness; 0 = no traveling waves
-- `TILT_LP` — tilt filter responsiveness; higher = snappier but noisier
+- `WATER_LEVEL` — total water volume (this × cell count)
+- `WALL_CLING` — meniscus strength
+- `PLANE_SCALE` / `PLANE_PULL` — tilt travel / settle speed
+- `WAVE_DAMP` — velocity retention per tick (lower = settles faster)
 - `AX_SIGN` / `AY_SIGN` — flip if water pools the wrong way
-- `DISPLAY_BRIGHTNESS` (modules/tikk-led-matrix/tikk_led_matrix.c) — 0-100
-
-## Flashing (J-Link jig)
-
-The board is flashed via a J-Link on a custom jig that clips onto the
-component side (which faces the LEDs — unclip to view the display):
-
-    JLinkExe -device nRF52840_xxAA -if SWD -speed 1000 -CommandFile app/flash.jlink
-
-The build now includes MCUboot (sysbuild): mcuboot at 0x0 (64 KB, with
-USB-CDC serial recovery — brick insurance) and the app in slot 0 at
-0x10000. flash.jlink loads `build/merged.hex` (bootloader + app).
-
-Artifact-name trap (bit us once): **`build/mcuboot_primary.hex` is NOT
-"mcuboot + app"** — despite the name it contains ONLY the slot-0 app
-image (starts at 0x10000, no bootloader). Flashing it alone leaves 0x0
-erased and the CPU faults on boot (IACCVIOL, PC in SCB space). The
-historical note below is from the pre-mcuboot era and is now inverted:
-
-(OLD, no-mcuboot builds only: the app linked directly at 0x0 and
-build/merged.hex back then was app@0x1000-behind-an-MBR — bricking.
-With the current mcuboot sysbuild, merged.hex is exactly the right
-thing to flash.)
-
-## Notes / TODO
-
-- Flash method: promicro_nrf52840 default runner (UF2 bootloader vs debug
-  probe) — decide at first hardware bring-up
-- Per-LED PWM (grayscale waves): driver's write_channels is on/off only; would
-  need PWM page burst support in the is31fl3731 driver
-- Pouch/BLE transport: later
+- `DISPLAY_BRIGHTNESS` (modules/tikk-led-matrix/tikk_led_matrix.c)
 
 ## Troubleshooting
 
-Gateway/BLE/cloud failure modes and their fixes — including the
-Connect Agent rev 28 device-cert bug analysis with captured evidence —
-live in [troubleshooting/connect-agent.md](troubleshooting/connect-agent.md).
-The capture proxy used to gather the evidence is
-[tools/gw-capture-proxy.py](tools/gw-capture-proxy.py).
+Gateway/BLE/cloud failure modes — the snap's dead-stack cert bug, the
+4.00 root cause, pairing hygiene, CDC renumbering — live in
+[troubleshooting/connect-agent.md](troubleshooting/connect-agent.md).
+The workspace-level `~/golioth/microros/SESSION-NOTES.md` carries the
+full session-by-session post-mortems and verified recipes.

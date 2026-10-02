@@ -10,7 +10,7 @@ Usage:
 
 - upload: POSTs the signed binary as an artifact of package "main"
   (JSON body, content = base64 — the format Golioth's REST expects).
-- deploy: creates a NEW deployment in cohort "tikk-demo" with the
+- deploy: creates a NEW deployment in the configured cohort with the
   artifact for that version. Deployments are immutable — each toggle
   (0.1.0 <-> 0.2.0) is a fresh deployment; the cohort's active
   deployment is the desired state devices converge to on check-in.
@@ -29,10 +29,13 @@ import urllib.error
 import ssl
 
 BASE = "https://api.golioth.io"
-ORG = "chris-gammell"
-PROJECT = "connect-demo"
+# Console coordinates come from the environment so no internal project
+# structure is baked into the public repo:
+#   export GOLIOTH_ORG=... GOLIOTH_PROJECT=... GOLIOTH_COHORT=...
+ORG = os.environ.get("GOLIOTH_ORG", "")
+PROJECT = os.environ.get("GOLIOTH_PROJECT", "")
 PACKAGE = "main"
-COHORT = "microros-golioth-demo"
+COHORT = os.environ.get("GOLIOTH_COHORT", "")
 KEYFILE = os.path.expanduser("~/.golioth/api-key")
 
 CTX = ssl.create_default_context()
@@ -108,6 +111,9 @@ def cmd_deploy(args):
 
 
 def main():
+    missing = [n for n, v in (("GOLIOTH_ORG", ORG), ("GOLIOTH_PROJECT", PROJECT), ("GOLIOTH_COHORT", COHORT)) if not v]
+    if missing:
+        sys.exit(f"set console coordinates first: {', '.join(missing)} (see top of file)")
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")

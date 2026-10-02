@@ -65,7 +65,7 @@ with MCUboot's bundled RSA dev key by the sysbuild step).
 ## Flashing (J-Link jig)
 
     JLinkExe -device nRF52840_xxAA -if SWD -speed 1000 \
-        -SelectEmuBySN 851000760 -CommanderScript app/flash.jlink
+        -SelectEmuBySN <JLINK_SERIAL> -CommanderScript app/flash.jlink
 
 `flash.jlink` loads both hexes (MCUboot + signed app) from the default
 build dir and resets. Flashing erases only the pages written — the

@@ -1,3 +1,8 @@
+# NOTE (release prep): this manifest captures the older NCS-based flow
+# (nrf v3.0.1). The README documents the current, build-verified pure
+# Zephyr 4.4 flow (see "Workspace & build (pure Zephyr 4.4)"). A refreshed
+# 4.4 manifest is intentionally left out of the release-prep PR.
+#
 # Tikk micro-ROS liquid tilt display
 #
 # Workspace layout mirrors tikk-fleet:
